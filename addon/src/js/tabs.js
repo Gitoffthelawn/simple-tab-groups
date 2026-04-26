@@ -133,11 +133,13 @@ export function clearSkipTracking() { // TODO remove/refactor
 async function onCreated(tab) {
     await Utils.wait(50);
 
-    if (
-        skip.created.has(tab.id) ||
-        skip.removed.has(tab.id)
-    ) {
-        logger.log(onCreated, '🛑 skip tracking tab:', tab.id);
+    if (skip.removed.has(tab.id)) {
+        logger.log(onCreated, '🛑 skip removed tab:', tab.id);
+        return;
+    }
+
+    if (skip.created.has(tab.id)) {
+        logger.log(onCreated, '🛑 skip created tab:', tab.id);
         return;
     }
 
@@ -167,11 +169,13 @@ async function onCreated(tab) {
 async function onActivated({tabId, windowId, previousTabId = null}) {
     await Utils.wait(50 + 20); // needs to wait skipTrackingWindows list
 
-    if (
-        skip.tracking.has(tabId) ||
-        skip.tracking.has(previousTabId) ||
-        skipTrackingWindows.has(windowId)
-    ) {
+    if (skip.tracking.has(tabId) || skip.tracking.has(previousTabId)) {
+        logger.log(onActivated, '🛑 skip tracking one/all of tabs:', {tabId, previousTabId});
+        return;
+    }
+
+    if (skipTrackingWindows.has(windowId)) {
+        logger.log(onActivated, '🛑 skip tracking tab for window:', windowId, {tabId, previousTabId});
         return;
     }
 
@@ -203,6 +207,7 @@ async function processLongUrls(tabId, changeInfo) {
 
 async function onUpdated(tabId, changeInfo, tab) {
     if (skip.removed.has(tab.id)) {
+        logger.log(onUpdated, '🛑 skip removed tab:', tab.id);
         return;
     }
 
@@ -210,17 +215,17 @@ async function onUpdated(tabId, changeInfo, tab) {
 
     if (skip.tracking.has(tab.id)) {
         Cache.setTab(tab);
-        logger.log(onUpdated, '🛑 skip tracking for updated tab', tab.id);
+        logger.log(onUpdated, '🛑 skip tracking tab:', tab.id);
         return;
     }
-
-    // if tab was restored along with window, it needs to wait when GrantRestore will add the window to the skipTrackingWindows
-    await Utils.wait(50 + 20); // 50ms for tab onCreated + 20ms as a margin
 
     if (skipTrackingWindows.has(tab.windowId)) {
         logger.log(onUpdated, '🛑 skip tracking tab:', tab.id, 'for window:', tab.windowId);
         return;
     }
+
+    // if tab was restored along with window, it needs to wait when GrantRestore will add the window to the skipTrackingWindows
+    await Utils.wait(50 + 20); // 50ms for tab onCreated + 20ms as a margin
 
     delete tab.groupId; // TODO tmp
 
@@ -299,7 +304,7 @@ function onRemoved(tabId, {isWindowClosing, windowId}) {
 
     if (silent) {
         Cache.removeTab(tabId);
-        logger.log(onRemoved, '🛑 skip tracking for removed tab', tabId);
+        logger.log(onRemoved, '🛑 silent removed tab:', tabId);
         return;
     }
 
@@ -333,11 +338,17 @@ function onRemoved(tabId, {isWindowClosing, windowId}) {
 async function onMoved(tabId, {windowId, /* fromIndex, toIndex */}) {
     // await Utils.wait(); // ? no needs for wait skipTrackingWindows list
 
-    if (
-        skip.tracking.has(tabId) ||
-        skip.removed.has(tabId) ||
-        skipTrackingWindows.has(windowId)
-    ) {
+    if (skip.removed.has(tabId)) {
+        logger.log(onMoved, '🛑 skip removed tab:', tabId);
+        return;
+    }
+
+    if (skip.tracking.has(tabId)) {
+        logger.log(onMoved, '🛑 skip tracking tab:', tabId);
+        return;
+    }
+
+    if (skipTrackingWindows.has(windowId)) {
         logger.log(onMoved, '🛑 skip tracking tab:', tabId, 'for window:', windowId);
         return;
     }
@@ -358,11 +369,17 @@ async function onMoved(tabId, {windowId, /* fromIndex, toIndex */}) {
 async function onDetached(tabId, {oldWindowId}) { // notice: called before onAttached
     // await Utils.wait(); // ? no needs for wait skipTrackingWindows list
 
-    if (
-        skip.tracking.has(tabId) ||
-        skip.removed.has(tabId) ||
-        skipTrackingWindows.has(oldWindowId)
-    ) {
+    if (skip.removed.has(tabId)) {
+        logger.log(onDetached, '🛑 skip removed tab:', tabId);
+        return;
+    }
+
+    if (skip.tracking.has(tabId)) {
+        logger.log(onDetached, '🛑 skip tracking tab:', tabId);
+        return;
+    }
+
+    if (skipTrackingWindows.has(oldWindowId)) {
         logger.log(onDetached, '🛑 skip tracking tab:', tabId, 'for window:', oldWindowId);
         return;
     }
@@ -377,11 +394,17 @@ async function onDetached(tabId, {oldWindowId}) { // notice: called before onAtt
 async function onAttached(tabId, {newWindowId}) { // called when tabs.move()
     // await Utils.wait(); // ? no needs for wait skipTrackingWindows list
 
-    if (
-        skip.tracking.has(tabId) ||
-        skip.removed.has(tabId) ||
-        skipTrackingWindows.has(newWindowId)
-    ) {
+    if (skip.removed.has(tabId)) {
+        logger.log(onAttached, '🛑 skip removed tab:', tabId);
+        return;
+    }
+
+    if (skip.tracking.has(tabId)) {
+        logger.log(onAttached, '🛑 skip tracking tab:', tabId);
+        return;
+    }
+
+    if (skipTrackingWindows.has(newWindowId)) {
         logger.log(onAttached, '🛑 skip tracking tab:', tabId, 'for window:', newWindowId);
         return;
     }

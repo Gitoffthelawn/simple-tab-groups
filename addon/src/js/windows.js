@@ -320,13 +320,15 @@ async function runGrandRestore(restoredWindowIds) {
 
     // перемещаем недостающие вкладки из других окон
     // TODO проверить, надо ли отключать отслеживание вкладок, так как уже трекинг отключен для восстановленных окон
-    const skippedTabs = new Set();
+    const skippTrackingTabs = new Set();
     for (const groupToKeep of groupsAlreadyRestored.values()) {
-        if (!groupToKeep.tabs.some(tab => tab.windowId !== groupToKeep.window.id)) {
+        const tabsIntoAnotherWindows = groupToKeep.tabs.filter(tab => tab.windowId !== groupToKeep.window.id);
+
+        if (!tabsIntoAnotherWindows.length) {
             continue;
         }
 
-        Tabs.skipTracking(groupToKeep.tabs, skippedTabs);
+        Tabs.skipTracking(tabsIntoAnotherWindows, skippTrackingTabs);
 
         groupToKeep.tabs = await Tabs.moveNative(groupToKeep.tabs, {
             windowId: groupToKeep.window.id,
@@ -346,7 +348,7 @@ async function runGrandRestore(restoredWindowIds) {
             await Tabs.hide(groupToKeep.tabs);
         }
     }
-    Tabs.continueTracking(skippedTabs);
+    Tabs.continueTracking(skippTrackingTabs);
 
     const tabsToDeleteIds = Array.from(tabsToDelete.keys());
     log.log('deleting tabs:', tabsToDeleteIds);
