@@ -15,6 +15,7 @@ import * as Tabs from './tabs.js';
 import * as Groups from './groups.js';
 import * as Utils from './utils.js';
 import * as Cache from './cache.js';
+import * as MenusMain from '/js/menus-main.js';
 import * as Storage from './storage.js';
 
 export {on, off} from './broadcast.js?channel=windows';
@@ -450,6 +451,11 @@ async function onCreated(win) {
 
     log.log('groupId:', win.groupId);
 
+    if (win.groupId) {
+        const {group} = await Groups.load(win.groupId);
+        await MenusMain.groupLoaded(group);
+    }
+
     createdBatch.add(win.id);
 
     if (grandRestoreResult.callbackResult.shouldRestoreMissedTabs && isBatchLeader) {
@@ -478,6 +484,8 @@ const removedBatch = new BatchProcessor(async (windowIds) => {
 async function onRemoved(windowId) {
     const log = logger.start(['info', onRemoved], windowId);
 
+    const groupId = Cache.getWindowGroup(windowId);
+
     Cache.removeWindow(windowId);
 
     createdBatch.delete(windowId);
@@ -496,6 +504,11 @@ async function onRemoved(windowId) {
         });
 
         removedBatch.add(windowId);
+    }
+
+    if (groupId) {
+        const {group} = await Groups.load(groupId);
+        await MenusMain.groupUnloaded(group);
     }
 
     log.stop();
