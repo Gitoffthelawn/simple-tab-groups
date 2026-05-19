@@ -12,10 +12,10 @@ I use Windows 11 x64
 
 ```bash
 $ node -v
-v24.12.0
+v24.15.0
 
 $ npm -v
-11.6.2
+11.12.1
 ```
 
 Build code:

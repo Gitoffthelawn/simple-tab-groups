@@ -80,7 +80,7 @@ migrations.push({
     version: '2.4.5',
     migration(data) {
         data.groups = data.groups.map(function (group) {
-            if (!group.iconColor.trim()) {
+            if (!group.iconColor?.trim()) {
                 group.iconColor = 'transparent';
             }
 
@@ -233,6 +233,8 @@ migrations.push({
     migration(data) {
         data.groups.forEach(group => group.newTabContainer = null);
 
+        this.remove = [];
+
         migrations.some(prevMigration => {
             if (prevMigration.version === '4.1') {
                 return true;
@@ -308,7 +310,7 @@ migrations.push({
 
         data.leaveBookmarksOfClosedTabs = false;
 
-        if (data.autoBackupFolderName.toLowerCase() === 'stg-backups') {
+        if (data.autoBackupFolderName?.toLowerCase() === 'stg-backups') {
             data.autoBackupFolderName = '';
         }
     },
@@ -556,8 +558,8 @@ migrations.push({
             ...['Home', 'End', 'PageUp', 'PageDown', 'Insert', 'Delete', 'Enter'].map(value => [value, value]),
         ]);
 
-        function normalizeHotkeyKey({ key, keyCode }) {
-            return keysMap.get(keyCode) || keysMap.get(key) || key.toUpperCase();
+        function normalizeHotkeyKey({key, keyCode}) {
+            return keysMap.get(keyCode) || keysMap.get(key) || key?.toUpperCase();
         }
 
         data.hotkeys.forEach(hotkey => {
@@ -655,32 +657,49 @@ migrations.push({
 
         // ! MIGRATE group ids from small int to UUID
 
-        const blankUUID = '00000000-0000-0000-0000-000000000000';
-
-        function createGroupUUID({id, title}) {
-            const partGroupUUID = [...title]
-                .map(char => char.codePointAt(0))
-                .reduce((acc, codePoint) => acc + codePoint, id)
-                .toString(16);
-
-            return blankUUID.slice(0, -partGroupUUID.length) + partGroupUUID;
-        }
-
         const groupIdsMap = new Map;
 
+        async function createGroupUUID(group) {
+            const similarityData = [
+                'title',
+                'iconUrl',
+                'iconColor',
+                'iconViewType',
+            ].map(key => group[key]);
+
+            let newGroupId = await Utils.dataToUUIDv8(similarityData);
+
+            if (new Set(groupIdsMap.values()).has(newGroupId)) {
+                newGroupId = await Utils.dataToUUIDv8([group.id, ...similarityData]);
+            }
+
+            return newGroupId;
+        }
+
         for (const group of data.groups) {
-            groupIdsMap.set(group.id, createGroupUUID(group));
-            group.id = groupIdsMap.get(group.id);
+            const oldGroupId = String(group.id);
+            const newGroupId = await createGroupUUID(group);
+
+            groupIdsMap.set(oldGroupId, newGroupId);
+            group.id = newGroupId;
+        }
+
+        function getNewGroupId(groupId) {
+            if (!groupId) {
+                return null;
+            }
+
+            return groupIdsMap.get(String(groupId)) || null;
         }
 
         for (const group of data.groups) {
             if (group.moveToGroupIfNoneCatchTabRules) {
-                group.moveToGroupIfNoneCatchTabRules = groupIdsMap.get(group.moveToGroupIfNoneCatchTabRules) || null;
+                group.moveToGroupIfNoneCatchTabRules = getNewGroupId(group.moveToGroupIfNoneCatchTabRules);
             }
         }
 
         if (data.defaultGroupProps.moveToGroupIfNoneCatchTabRules) {
-            data.defaultGroupProps.moveToGroupIfNoneCatchTabRules = groupIdsMap.get(data.defaultGroupProps.moveToGroupIfNoneCatchTabRules);
+            data.defaultGroupProps.moveToGroupIfNoneCatchTabRules = getNewGroupId(data.defaultGroupProps.moveToGroupIfNoneCatchTabRules);
         }
 
         if (!data.defaultGroupProps.moveToGroupIfNoneCatchTabRules) {
@@ -693,7 +712,7 @@ migrations.push({
         } */
 
         for (const hotkey of data.hotkeys) {
-            hotkey.groupId = groupIdsMap.get(hotkey.groupId) || null;
+            hotkey.groupId = getNewGroupId(hotkey.groupId);
         }
 
         if (applyToCurrentInstance) {
@@ -704,7 +723,7 @@ migrations.push({
 
             await Promise.allSettled(windows.map(async win => {
                 const groupId = await browser.sessions.getWindowValue(win.id, 'groupId');
-                const newGroupId = groupIdsMap.get(groupId);
+                const newGroupId = getNewGroupId(groupId);
 
                 if (newGroupId) {
                     await browser.sessions.setWindowValue(win.id, 'groupId', newGroupId);
@@ -722,7 +741,7 @@ migrations.push({
             await Promise.allSettled(tabs.map(async tab => {
                 delete tab.groupId; // TODO temp
                 const groupId = await browser.sessions.getTabValue(tab.id, 'groupId');
-                const newGroupId = groupIdsMap.get(groupId);
+                const newGroupId = getNewGroupId(groupId);
 
                 if (groupId) {
                     if (newGroupId) {
@@ -751,14 +770,14 @@ migrations.push({
                     } else if (key.startsWith(keyStart)) {
                         const keyPart = key.slice(keyStart.length);
 
-                        if (keyPart.length === blankUUID.length) {
+                        if (Utils.isUUID(keyPart)) {
                             continue;
                         }
 
                         groupId = Number(keyPart);
                     }
 
-                    const newGroupId = groupIdsMap.get(groupId);
+                    const newGroupId = getNewGroupId(groupId);
 
                     if (newGroupId) {
                         notesData[`${keyStart}${newGroupId}`] = value;
@@ -778,7 +797,7 @@ migrations.push({
         data.autoBackupFilePath = data.autoBackupFolderName || '';
 
         if (
-            !data.autoBackupFolderName.length ||
+            !data.autoBackupFolderName?.length ||
             /^STG\-backups\-FF\-[a-z\d\.]+$/.test(data.autoBackupFolderName) ||
             /^STG\-backups\-(win|linux|mac|openbsd)\-\d+$/.test(data.autoBackupFolderName)
         ) {
@@ -796,8 +815,10 @@ migrations.push({
 });
 
 export default async function(data, applyToCurrentInstance = false) {
+    const DATA_VERSION = data?.version;
+
     const log = logger.start('Migration',
-        'data version:', data.version,
+        'data version:', DATA_VERSION,
         'CURRENT_VERSION:', CURRENT_VERSION,
         'applyToCurrentInstance:', applyToCurrentInstance
     );
@@ -808,21 +829,20 @@ export default async function(data, applyToCurrentInstance = false) {
         error: null,
     };
 
-    if (data.version === CURRENT_VERSION) {
+    if (DATA_VERSION === CURRENT_VERSION) {
         log.stop('data.version === CURRENT_VERSION', CURRENT_VERSION);
         return resultMigrate;
-    } else if (!data.version) {
-        log.throwError('invalid data version');
+    } else if (!DATA_VERSION) {
+        log.throwError('data.version is not defined');
     }
 
-    // start migration
     const keysToRemoveFromStorage = new Set;
 
     // if data version < required latest migrate version then need migration
-    if (Utils.compareNumericVersions(data.version, migrations[migrations.length - 1].version) < 0) {
+    if (Utils.compareNumericVersions(DATA_VERSION, migrations[migrations.length - 1].version) < 0) {
 
         for (const migration of migrations) {
-            if (Utils.compareNumericVersions(data.version, migration.version) < 0) {
+            if (Utils.compareNumericVersions(DATA_VERSION, migration.version) < 0) {
                 const mlog = log.start('', 'apply version:', migration.version, '...');
 
                 await migration.migration?.(data, applyToCurrentInstance);
@@ -834,8 +854,10 @@ export default async function(data, applyToCurrentInstance = false) {
         }
 
     } else {
-        const versionDiffIndex = Utils.compareNumericVersions(data.version, CURRENT_VERSION);
+        const versionDiffIndex = Utils.compareNumericVersions(DATA_VERSION, CURRENT_VERSION);
 
+        // Allow rollback only inside the same build line, for example 1.2.3.4 -> 1.2.3.0.
+        // If major/minor/patch is newer, then this addon may not understand that data schema.
         if (versionDiffIndex > 0 && versionDiffIndex <= 3) {
             resultMigrate.error = 'updateAddonToLatestVersion';
             log.stopError(resultMigrate.error);
@@ -846,14 +868,15 @@ export default async function(data, applyToCurrentInstance = false) {
     data.version = CURRENT_VERSION;
 
     if (keysToRemoveFromStorage.size) {
+        log.log('removing keys in data object:', Array.from(keysToRemoveFromStorage), '...');
         keysToRemoveFromStorage.forEach(key => delete data[key]);
-        log.log('remove keys in storage', Array.from(keysToRemoveFromStorage));
         if (applyToCurrentInstance) {
+            log.log('and remove these keys in storage...');
             await Storage.remove(...keysToRemoveFromStorage);
         }
     }
 
     resultMigrate.migrated = true;
-    log.stop('migrated', true);
+    log.stop('migration from', DATA_VERSION, 'to', CURRENT_VERSION, 'has been finished');
     return resultMigrate;
 }

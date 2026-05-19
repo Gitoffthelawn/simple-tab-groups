@@ -163,11 +163,18 @@ export function sliceText(text, length = 50) {
     return (text?.length > length) ? (text.slice(0, length - 3) + '...') : (text || '');
 }
 
-export async function sha256Hex(str) {
+async function sha256Bytes(str) {
     const data = encodeToBytes(str);
     const hashBuffer = await self.crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return new Uint8Array(hashBuffer);
+}
+
+function bytesToHex(bytes) {
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function sha256Hex(str) {
+    return bytesToHex(await sha256Bytes(str));
 }
 
 export function isAllowExternalRequestAndSender(request, sender, extensionRules = {}) {
@@ -268,9 +275,58 @@ export function normalizeUrl(url) {
     return url;
 }
 
-const UUID_REGEXP = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_REGEXP = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function isUUID(uuid) {
     return UUID_REGEXP.test(uuid);
+}
+
+function bytesToUUIDv8(bytes) {
+    const isUintArray = bytes instanceof Uint8Array
+        || bytes instanceof Uint8ClampedArray
+        || bytes instanceof Uint16Array
+        || bytes instanceof Uint32Array
+        || bytes instanceof BigUint64Array;
+
+    if (!isUintArray) {
+        throw new TypeError('bytes must be an unsigned typed array');
+    }
+
+    const sourceBytes = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const uuidBytes = new Uint8Array(16);
+
+    uuidBytes.set(sourceBytes.subarray(0, 16));
+
+    uuidBytes[6] = (uuidBytes[6] & 0x0f) | 0x80;
+    uuidBytes[8] = (uuidBytes[8] & 0x3f) | 0x80;
+
+    const hex = bytesToHex(uuidBytes);
+
+    return [
+        hex.slice(0, 8),
+        hex.slice(8, 12),
+        hex.slice(12, 16),
+        hex.slice(16, 20),
+        hex.slice(20),
+    ].join('-');
+}
+
+export async function dataToUUIDv8(data) {
+    switch (type(data)) {
+        case 'array':
+            data = JSON.stringify(data.map(String));
+            break;
+        case 'object':
+            data = JSON.stringify(Object.keys(data).sort().reduce((acc, key) => {
+                acc[key] = String(data[key]);
+                return acc;
+            }, {}));
+            break;
+        case 'string':
+        default:
+            data = String(data);
+    }
+
+    return bytesToUUIDv8(await sha256Bytes(data));
 }
 
 export function concatTabs(windowsOrGroups) {
@@ -518,7 +574,10 @@ export function onlyUniqueFilterLast(value, index, self) {
 }
 
 export function assignKeys(toObj, fromObj, keys) {
-    keys.forEach(key => toObj[key] = fromObj[key]);
+    for (const key of keys) {
+        toObj[key] = fromObj[key];
+    }
+
     return toObj;
 }
 
@@ -527,9 +586,15 @@ export function isEqualByKeys(obj1, obj2, keys) {
 }
 
 export function extractKeys(obj, keys, useClone = false) {
+    if (!useClone) {
+        return assignKeys({}, obj, keys);
+    }
+
     const newObj = {};
 
-    keys.forEach(key => newObj[key] = (useClone ? JSON.clone(obj[key]) : obj[key]));
+    for (const key of keys) {
+        newObj[key] = JSON.clone(obj[key]);
+    }
 
     return newObj;
 }
