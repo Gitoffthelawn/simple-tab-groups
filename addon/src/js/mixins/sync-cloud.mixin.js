@@ -4,7 +4,7 @@ import {objectToNativeError} from '/js/logger.js';
 import * as Constants from '/js/constants.js';
 import * as Utils from '/js/utils.js';
 import * as Messages from '/js/messages.js';
-import * as Cloud from '/js/sync/cloud/cloud.js?context-mixin'; // context-mixin - for unique Broadcast listeners scope. Because on this page Cloud.off() has been called in beforeDestroy() and without context-mixin it will remove listeners into Options page
+import * as Cloud from '/js/sync/cloud/cloud.js';
 
 const MODULE_NAME = 'sync-cloud.mixin';
 // const logger = new Logger(MODULE_NAME, [Utils.getNameFromPath(location.href)]);
@@ -25,33 +25,32 @@ export default {
     },
     created() {
         this.syncCloudUpdateInfo();
+        const list = this.syncCloudOffListeners = new Set();
 
-        Cloud.onSyncUiRequest();
+        list.add(Cloud.onSyncUiRequestListener());
 
-        Cloud.on(['sync-start', 'sync-progress', 'sync-end', 'sync-error', 'sync-finish'], () => {
+        list.add(Cloud.on(['sync-start', 'sync-progress', 'sync-end', 'sync-error', 'sync-finish'], () => {
             this.syncCloudInProgress = true; // any action means that progress is being made
-            clearTimeout(this.syncCloudUpdateInfoTimer);
-            clearTimeout(this.syncCloudProgressTimer);
-            clearTimeout(this.syncCloudInProgressTimer);
-        });
+            this.syncCloudClearTimers();
+        }));
 
-        Cloud.on('sync-start', () => {
+        list.add(Cloud.on('sync-start', () => {
             this.syncCloudErrorMessage = '';
-        });
+        }));
 
-        Cloud.on('sync-progress', ({progress}) => {
+        list.add(Cloud.on('sync-progress', ({progress}) => {
             this.syncCloudProgress = progress;
-        });
+        }));
 
-        Cloud.on('sync-end', () => {
+        list.add(Cloud.on('sync-end', () => {
             // nothing to do
-        });
+        }));
 
-        Cloud.on('sync-error', e => {
+        list.add(Cloud.on('sync-error', e => {
             this.syncCloudErrorMessage = String(objectToNativeError(e));
-        });
+        }));
 
-        Cloud.on('sync-finish', ({ok}) => {
+        list.add(Cloud.on('sync-finish', ({ok}) => {
             this.syncCloudProgressTimer = setTimeout(() => {
                 this.syncCloudProgress = 0;
             }, ok ? 600 : 5000);
@@ -61,13 +60,19 @@ export default {
             }, 500);
 
             this.syncCloudUpdateInfo();
-        });
+        }));
     },
     beforeDestroy() {
-        Cloud.off();
-        clearTimeout(this.syncCloudUpdateInfoTimer);
+        this.syncCloudOffListeners.forEach(off => off());
+        this.syncCloudOffListeners.clear();
+        this.syncCloudClearTimers();
     },
     methods: {
+        syncCloudClearTimers() {
+            clearTimeout(this.syncCloudUpdateInfoTimer);
+            clearTimeout(this.syncCloudProgressTimer);
+            clearTimeout(this.syncCloudInProgressTimer);
+        },
         async syncCloud(trust, revision) {
             return await sendMessageModule('BG.cloudSync', {trust, revision});
         },

@@ -329,8 +329,8 @@ export async function dataToUUIDv8(data) {
     return bytesToUUIDv8(await sha256Bytes(data));
 }
 
-export function concatTabs(windowsOrGroups) {
-    return windowsOrGroups.reduce((acc, wg) => [...acc, ...wg.tabs], []);
+export function flatTabs(tabCollections) {
+    return tabCollections.flatMap(({tabs}) => tabs);
 }
 
 export function getLastActiveTab(tabs) {

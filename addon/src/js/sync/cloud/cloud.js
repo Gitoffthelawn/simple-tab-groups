@@ -288,7 +288,7 @@ async function sync(trust = null, revision = null, progressFunc = null) {
 
     // remove unnecessary tabs
     if (syncResult.changes.tabsToRemove.size) {
-        // if has local changes - do silent remove. "sync-end" event will trigger "groups-updated" event and reload all groups with tabs
+        // if has local changes - do silent remove. "Cloud.sync-end" event will trigger "Groups.updated.all" event and reload all groups with tabs
         await Tabs.remove(Array.from(syncResult.changes.tabsToRemove), syncResult.changes.local);
     }
 
@@ -427,7 +427,7 @@ async function syncGroups(localData, cloudData, sourceOfTruth, changes) {
     const isAvailableFavIconToSync = favIconUrl => favIconUrl?.startsWith('data:');
 
     const favIconUrlsMap = new Map;
-    for (const tab of Utils.concatTabs([...localGroups, ...cloudGroups])) {
+    for (const tab of Utils.flatTabs([...localGroups, ...cloudGroups])) {
         if (isAvailableFavIconToSync(tab.favIconUrl)) {
             favIconUrlsMap.set(tab.url, tab.favIconUrl);
         }
@@ -1006,12 +1006,8 @@ function isNetworkError(error) {
     return isNetErr;
 }
 
-export function sendSyncUiResponse() {
-    send('sync-ui-response');
-}
-
-export function onSyncUiRequest() {
-    return CloudBroadcast.on('sync-ui-request', sendSyncUiResponse);
+export function onSyncUiRequestListener() {
+    return CloudBroadcast.on('sync-ui-request', () => send('sync-ui-response'));
 }
 
 export async function shouldShowSyncErrorNotification(syncResult, trigger) {

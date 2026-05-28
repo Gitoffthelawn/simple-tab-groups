@@ -214,7 +214,7 @@ migrations.push({
         });
 
         if (applyToCurrentInstance) {
-            let allTabs = Utils.concatTabs(windows);
+            let allTabs = Utils.flatTabs(windows);
 
             await Tabs.hide(allTabs, true);
 

@@ -10,11 +10,14 @@ import * as Groups from '/js/groups.js';
 import * as Utils from '/js/utils.js';
 import * as Messages from '/js/messages.js';
 import * as Windows from '/js/windows.js';
+import * as Cloud from '/js/sync/cloud/cloud.js';
 
 const MODULE_NAME = 'tab-groups.mixin';
 const logger = new Logger(MODULE_NAME, [Utils.getNameFromPath(location.href)]);
 
 const mainStorage = localStorage.create(Constants.MODULES.BACKGROUND);
+
+const isManage = location.href.startsWith(Constants.PAGES.MANAGE);
 
 const instances = new Set;
 
@@ -22,22 +25,28 @@ const {
     sendMessage,
     sendMessageModule,
     disconnect,
-} = Messages.connectToBackground(MODULE_NAME, '*', (syncEvent) => {
+} = Messages.connectToBackground(MODULE_NAME, 'lock-addon', (syncEvent) => {
     logger.info('got message', syncEvent.action, syncEvent);
 
+    if (syncEvent.action !== 'lock-addon') {
+        return;
+    }
+
+    disconnect();
+
     for (const instance of instances) {
-        instance.$emit(syncEvent.action, syncEvent);
+        instance.tabGroupsHandleLockAddon();
     }
 });
 
-const startUpDataPromise = sendMessage('get-startup-data');
+const startUpDataPromise = sendMessage('get-startup-data', {isManage});
 
 export default {
     data() {
-        self.app = this;
-
         this.sendMessage = sendMessage;
         this.sendMessageModule = sendMessageModule;
+
+        this.isManage = isManage;
 
         return {
             enableDebug: mainStorage.enableDebug,
@@ -60,7 +69,7 @@ export default {
             groupToEdit: null,
             groups: [],
 
-            multipleTabIds: [], // TODO try use Set Object
+            multipleTabIds: [],
             unSyncTabs: [],
 
             dragData: null,
@@ -80,9 +89,6 @@ export default {
         },
     },
     computed: {
-        isManage() {
-            return this.$options.name === Constants.MODULES.MANAGE;
-        },
         includeTabThumbnails() {
             return this.isManage && this.options.showTabsWithThumbnailsInManageGroups;
         },
@@ -110,23 +116,27 @@ export default {
         },
     },
     created() {
-        window.$vm = this;
         instances.add(this);
         this.containers = this.getContainers();
     },
     beforeDestroy() {
         instances.delete(this);
+        this.tabGroupsRemoveListeners();
     },
     mounted() { // called before mounted in .vue files
         this.tabGroupsPromise = this.tabGroupsLoad(startUpDataPromise);
     },
     methods: {
-        async tabGroupsLoad(startUpDataPromise = sendMessage('get-startup-data')) {
+        async loadWindowsAndGroups(startUpData = {}) {
+            await this.loadWindows(startUpData);
+            await this.loadGroups(startUpData);
+        },
+
+        async tabGroupsLoad(startUpDataPromise = sendMessage('get-startup-data', {isManage})) {
             const startUpData = await startUpDataPromise;
 
-            await this.loadWindows(startUpData);
-            this.loadGroups(startUpData);
-            this.loadUnsyncedTabs(startUpData);
+            await this.loadWindowsAndGroups(startUpData);
+            await this.loadUnsyncedTabs(startUpData);
         },
 
         isTabLoading: Tabs.isLoading,
@@ -135,71 +145,80 @@ export default {
         groupTabsCountMessage: Groups.tabsCountMessage,
 
         tabGroupsSetupListeners() {
-            const offListeners = new Set();
+            const list = this.tabGroupsOffListeners = new Set();
 
-            offListeners.add(Containers.onChanged(() => this.onChangedContainers()));
+            list.add(Containers.onChanged(() => this.onChangedContainers()));
 
-            Windows.on(['opened', 'closed'], () => this.loadWindows());
+            list.add(Windows.on(['opened', 'closed'], () => this.loadWindows()));
 
-            Tabs.on('updated', ({tabId, changeInfo}) => {
+            list.add(Tabs.on('updated', ({tabId, changeInfo}) => {
                 const tab = this.allTabs[tabId] ?? this.unSyncTabs.find(tab => tab.id === tabId);
                 tab && Object.assign(tab, changeInfo);
-            });
-            Tabs.on('updated.group', ({groupId, tabs}) => {
-                const group = this.groups.find(group => group.id === groupId);
-                group.tabs = tabs.map(tab => this.mapTab(tab, group.isArchive));
-            });
-            Tabs.on('updated.all', ({windows}) => {
-                this.loadUnsyncedTabs({windows});
-            });
-            Tabs.on('removed', ({tabId, groupId}) => {
+            }));
+            list.add(Tabs.on('updated.group', ({groupId}) => {
+                this.loadGroupTabs(groupId);
+            }));
+            list.add(Tabs.on('updated.unsync', ({windowId}) => {
+                this.loadUnsyncedTabs({windowId});
+            }));
+            list.add(Tabs.on('removed', ({tabId, groupId}) => {
                 const group = this.groups.find(group => group.id === groupId);
                 const tabIndex = group.tabs.findIndex(tab => tab.id === tabId);
 
                 if (tabIndex !== -1) {
                     group.tabs.splice(tabIndex, 1);
                 }
-            });
-            Tabs.on('removed.unsync', ({tabId}) => {
+            }));
+            list.add(Tabs.on('removed.unsync', ({tabId}) => {
                 const tabIndex = this.unSyncTabs.findIndex(tab => tab.id === tabId);
 
                 if (tabIndex !== -1) {
                     this.unSyncTabs.splice(tabIndex, 1);
                 }
-            });
+            }));
 
-            this.$on('group-added', request => {
+            list.add(Groups.on('added', request => {
                 this.groups.push(this.mapGroup(request.group));
-            });
-            this.$on('group-updated', request => {
+                this.onGroupAdded?.(request);
+            }));
+            list.add(Groups.on('updated', request => {
                 const group = this.groups.find(group => group.id === request.group.id);
                 Object.assign(group, request.group);
-            });
-            this.$on('group-removed', request => {
+                this.onGroupUpdated?.(request);
+            }));
+            list.add(Groups.on('removed', request => {
                 this.groups = this.groups.filter(group => group.id !== request.groupId);
-            });
-            this.$on('group-loaded', async request => {
-                await this.loadWindows();
-                this.$emit('group-loaded-ready', request);
-            });
-            this.$on('group-unloaded', () => this.tabGroupsLoad());
+                this.onGroupRemoved?.(request);
+            }));
+            list.add(Groups.on('loaded', async request => {
+                await this.loadWindowsAndGroups();
+                await this.onGroupLoadedReady?.(request);
+            }));
+            list.add(Groups.on('unloaded', async request => {
+                await this.tabGroupsLoad();
+                this.onGroupUnloaded?.(request);
+            }));
+            list.add(Groups.on('updated.all', async request => {
+                await this.tabGroupsLoad();
+                this.onGroupsUpdatedAll?.(request);
+            }));
 
-            this.$on('groups-updated', () => this.tabGroupsLoad());
-
-            this.$on('sync-end', ({changes}) => {
-                if (changes.local) {
-                    this.$emit('groups-updated');
+            list.add(Cloud.on('sync-end', async request => {
+                if (request.changes.local) {
+                    await this.tabGroupsLoad();
+                    this.onGroupsSyncEnd?.(request);
                 }
-            });
+            }));
+        },
 
-            this.$on('lock-addon', () => {
-                this.isLoading = true;
-                disconnect();
-                Windows.off();
-                Tabs.off();
-                offListeners.forEach(off => off());
-                offListeners.clear();
-            });
+        tabGroupsRemoveListeners() {
+            this.tabGroupsOffListeners.forEach(off => off());
+            this.tabGroupsOffListeners.clear();
+        },
+
+        tabGroupsHandleLockAddon() {
+            this.isLoading = true;
+            this.tabGroupsRemoveListeners();
         },
         onChangedContainers() {
             this.containers = this.getContainers();
@@ -222,38 +241,27 @@ export default {
             this.openedWindows = windows ?? await sendMessageModule('Windows.load');
         },
         async loadGroups({groups} = {}) {
-            ({groups} = groups ? {groups} : await sendMessageModule('Groups.load', null, true, true, this.includeTabThumbnails));
+            groups ??= await sendMessageModule('Groups.load', null, true, true, this.includeTabThumbnails)
+                .then(({groups}) => groups);
 
             this.groups = groups.map(this.mapGroup, this);
 
             this.multipleTabIds = [];
         },
-        async loadUnsyncedTabs({windows} = {}) {
-            const includeTabThumbnails =  this.isManage && this.options.showTabsWithThumbnailsInManageGroups;
+        async loadUnsyncedTabs({windows = null, windowId = null} = {}) {
+            if (!windowId || this.currentWindow?.id === windowId) {
+                windows ??= await sendMessageModule('Windows.load', true, true, this.includeTabThumbnails);
 
-            windows ??= await sendMessageModule('Windows.load', true, true, includeTabThumbnails);
+                const win = windows.find(w => windowId ? w.id === windowId : w.id === this.currentWindow.id);
 
-            const tabs = [];
-
-            function addTabs(win) {
-                for (const tab of win.tabs) {
-                    if (!tab.groupId) {
-                        tabs.push(tab);
-                    }
+                if (!win) {
+                    return;
                 }
-            }
 
-            for (const win of windows) {
-                if (this.currentWindow.type === browser.windows.WindowType.NORMAL) {
-                    if (win.id === this.currentWindow.id) {
-                        addTabs(win);
-                    }
-                } else {
-                    addTabs(win);
-                }
+                this.unSyncTabs = win.tabs
+                    .filter(tab => !tab.groupId)
+                    .map(tab => this.mapTab(tab));
             }
-
-            this.unSyncTabs = tabs.map(this.mapTab, this);
         },
 
         mapGroup(group) {
@@ -372,7 +380,7 @@ export default {
                 return true;
             });
 
-            const tabsToDiscard = Utils.concatTabs(groupsToDiscard);
+            const tabsToDiscard = Utils.flatTabs(groupsToDiscard);
 
             sendMessageModule('Tabs.discard', tabsToDiscard.map(Tabs.extractId));
         },
@@ -391,10 +399,10 @@ export default {
         },
 
         async loadGroupTabs(groupId) {
-            const {group: {tabs}} = await Groups.load(groupId, true, true, this.includeTabThumbnails);
+            const {group: {tabs}} = await sendMessageModule('Groups.load', groupId, true, true, this.includeTabThumbnails);
             const group = this.groups.find(gr => gr.id === groupId);
 
-            group.tabs = tabs.map(this.mapTab, this);
+            group.tabs = tabs.map(tab => this.mapTab(tab, group.isArchive));
         },
 
         openGroupSettings(group) {

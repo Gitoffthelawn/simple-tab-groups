@@ -44,6 +44,7 @@ import * as Menus from '/js/menus.js';
 import * as MenusMain from '/js/menus-main.js';
 // import * as MenusBookmark from '/js/menus-bookmark.js';
 import * as Groups from '/js/groups.js';
+import * as GroupsExternal from '/js/groups-external.js';
 import * as Tabs from '/js/tabs.js';
 import * as Windows from '/js/windows.js';
 import * as Extensions from '/js/extensions.js?auto-detect-conflicted';
@@ -350,16 +351,7 @@ async function applyGroup(windowId, groupId, activeTabId, applyFromHistory = fal
             }
         }
 
-        sendMessageFromBackground('group-loaded', {
-            groupId,
-            windowId,
-            addTabs,
-        });
-
-        sendExternalMessage('group-loaded', {
-            groupId,
-            windowId,
-        });
+        Groups.sendLoaded(groupId, windowId, addTabs);
 
         result = true;
     } catch (e) {
@@ -666,6 +658,7 @@ function addEvents() {
 
     Tabs.addListeners();
     Windows.addListeners();
+    GroupsExternal.addListeners();
 
     Permissions.onAdded.add(onPermissionsAdded);
     Permissions.onRemoved.add(onPermissionsRemoved);
@@ -681,6 +674,7 @@ function removeEvents() {
 
     Tabs.removeListeners();
     Windows.removeListeners();
+    GroupsExternal.removeListeners();
 
     Permissions.onAdded.clear();
     Permissions.onRemoved.clear();
@@ -1376,7 +1370,7 @@ async function onBackgroundMessage(message, sender) {
                 break;
             case 'get-startup-data':
                 {
-                    const includeThumbnail = data.manage
+                    const includeThumbnail = data.isManage
                         ? options.showTabsWithThumbnailsInManageGroups
                         : false;
 
@@ -2146,7 +2140,7 @@ async function init() {
 
         windows.filter(win => win.groupId).forEach(win => groupsHistory.add(win.groupId));
 
-        let tabs = Utils.concatTabs(windows);
+        let tabs = Utils.flatTabs(windows);
 
         await Containers.removeUnusedTemporaryContainers(tabs);
         log.log('Containers.removeUnusedTemporaryContainers finish');

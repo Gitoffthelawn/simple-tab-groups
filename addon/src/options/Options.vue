@@ -57,21 +57,10 @@ const HASH = {
     },
 };
 
-let instance;
-
 const {
     sendMessage,
     sendMessageModule,
-} = Messages.connectToBackground(Constants.MODULES.OPTIONS, [
-    'group-added',
-    'group-removed',
-    'group-updated',
-    'groups-updated',
-], ({action}) => {
-    if (action.startsWith('group')) {
-        instance?.loadGroups();
-    }
-});
+} = Messages.connectToBackground(Constants.MODULES.OPTIONS);
 
 export default {
     name: Constants.MODULES.OPTIONS,
@@ -81,7 +70,6 @@ export default {
         optionsMixin,
     ],
     data() {
-        window.app = this;
         this.MANIFEST = Constants.MANIFEST;
         this.IS_WINDOWS = Constants.IS_WINDOWS;
 
@@ -233,7 +221,8 @@ export default {
         'backup-location-host': backupLocationHost,
     },
     created() {
-        instance = this;
+        this.groupsOffListeners = new Set;
+        this.groupsOffListeners.add(Groups.on(['added', 'removed', 'updated', 'updated.all'], () => this.loadGroups()));
 
         this.$on('options-reloaded', () => this.addCustomWatchers());
 
@@ -253,6 +242,10 @@ export default {
                 this.loadGroups();
             }
         });
+    },
+    beforeDestroy() {
+        this.groupsOffListeners.forEach(off => off());
+        this.groupsOffListeners.clear();
     },
     mounted() {
         this.goToBlock(HASH.block);

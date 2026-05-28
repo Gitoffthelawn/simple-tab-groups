@@ -2,6 +2,7 @@ import './prefixed-storage.js';
 
 import Logger from './logger.js';
 import backgroundSelf from './background.js';
+import * as GroupsBroadcast from './broadcast.js?channel=groups';
 import * as Constants from './constants.js';
 import * as Storage from './storage.js';
 import * as Cache from './cache.js';
@@ -18,6 +19,8 @@ import * as MenusMain from './menus-main.js';
 import * as Tabs from './tabs.js';
 import * as Utils from './utils.js';
 
+export {on, off} from './broadcast.js?channel=groups';
+
 const logger = new Logger(Constants.MODULES.GROUPS);
 
 const mainStorage = localStorage.create(Constants.MODULES.BACKGROUND);
@@ -33,15 +36,33 @@ const KEYS_RESPONSIBLE_VIEW = new Set([
     'prependTitleToWindow',
 ]);
 
-const DEPENDENT_KEYS_FOR_EXTERNAL_EXTENSIONS = new Set([
-    'title',
-    'iconUrl',
-    'iconColor',
-    'iconViewType',
-    'isArchive',
-    'isSticky',
-    'newTabContainer',
-]);
+function send(action, data = {}) {
+    GroupsBroadcast.send({action, ...data});
+}
+
+export function sendAdded(group, windowId) {
+    send('added', {group, windowId});
+}
+
+export function sendUpdated(group, fullGroup) {
+    send('updated', {group, fullGroup});
+}
+
+export function sendRemoved(groupId, windowId) {
+    send('removed', {groupId, windowId});
+}
+
+export function sendLoaded(groupId, windowId, addTabs = []) {
+    send('loaded', {groupId, windowId, addTabs});
+}
+
+export function sendUnloaded(groupId, windowId) {
+    send('unloaded', {groupId, windowId});
+}
+
+export function sendUpdatedAll() {
+    send('updated.all');
+}
 
 Containers.onChanged(async () => {
     if (!mainStorage.inited) {
@@ -118,7 +139,7 @@ export async function save(groups, withMessage = false) {
     }
 
     if (withMessage) {
-        backgroundSelf.sendMessageFromBackground('groups-updated');
+        sendUpdatedAll();
     }
 
     log.stop();
@@ -248,15 +269,7 @@ export async function add(windowId, tabIds = [], title = null) {
         });
     }
 
-    backgroundSelf.sendMessageFromBackground('group-added', {
-        group: newGroup,
-        windowId,
-    });
-
-    backgroundSelf.sendExternalMessage('group-added', {
-        group: mapForExternalExtension(newGroup),
-        windowId,
-    });
+    sendAdded(newGroup, windowId);
 
     await MenusMain.groupAdded(newGroup, windowId);
 
@@ -316,15 +329,7 @@ export async function remove(groupId) {
 
     await Bookmarks.removeGroup(group).catch(log.onCatch('cant remove bookmark', false));
 
-    backgroundSelf.sendMessageFromBackground('group-removed', {
-        groupId: groupId,
-        windowId: groupWindowId,
-    });
-
-    backgroundSelf.sendExternalMessage('group-removed', {
-        groupId: groupId,
-        windowId: groupWindowId,
-    });
+    sendRemoved(groupId, groupWindowId);
 
     log.stop();
 }
@@ -395,13 +400,7 @@ export async function restore(groupId) {
 
     await MenusMain.groupAdded(group);
 
-    backgroundSelf.sendMessageFromBackground('group-added', {
-        group: group,
-    });
-
-    backgroundSelf.sendExternalMessage('group-added', {
-        group: mapForExternalExtension(group),
-    });
+    sendAdded(group);
 
     log.stop('success restored', group.id);
 }
@@ -439,18 +438,10 @@ export async function update(groupId, updateData) {
 
     await save(groups);
 
-    backgroundSelf.sendMessageFromBackground('group-updated', {
-        group: {
-            id: groupId,
-            ...updateData,
-        },
-    });
-
-    if (updateDataKeys.intersection(DEPENDENT_KEYS_FOR_EXTERNAL_EXTENSIONS).size) {
-        backgroundSelf.sendExternalMessage('group-updated', {
-            group: mapForExternalExtension(group),
-        });
-    }
+    sendUpdated({
+        id: groupId,
+        ...updateData,
+    }, group);
 
     if (updateDataKeys.intersection(KEYS_RESPONSIBLE_VIEW).size) {
         await Browser.actionGroup(group);
@@ -600,15 +591,7 @@ export async function unload(groupId) {
 
     await MenusMain.groupUnloaded(group, windowId);
 
-    backgroundSelf.sendMessageFromBackground('group-unloaded', {
-        groupId,
-        windowId,
-    });
-
-    backgroundSelf.sendExternalMessage('group-unloaded', {
-        groupId,
-        windowId,
-    });
+    sendUnloaded(groupId, windowId);
 
     log.stop();
     return true;
@@ -620,7 +603,8 @@ export async function archiveToggle(groupId) {
     await Browser.actionLoading();
 
     let {group, groups} = await load(groupId, true),
-        tabsToRemove = [];
+        tabsToRemove = [],
+        needUpdateTabs = false;
 
     log.log('group.isArchive', group.isArchive, '=>', !group.isArchive);
 
@@ -633,6 +617,7 @@ export async function archiveToggle(groupId) {
         await Tabs.hide(createdTabs, true);
 
         group.tabs = [];
+        needUpdateTabs = true;
     } else {
         if (Cache.getWindowId(groupId)) {
             const result = await unload(groupId);
@@ -657,11 +642,11 @@ export async function archiveToggle(groupId) {
 
     await Tabs.remove(tabsToRemove, true);
 
-    backgroundSelf.sendMessageFromBackground('groups-updated');
+    sendUpdated(group, group);
 
-    backgroundSelf.sendExternalMessage('group-updated', {
-        group: mapForExternalExtension(group),
-    });
+    if (needUpdateTabs) {
+        Tabs.sendUpdatedGroup(groupId);
+    }
 
     await Browser.actionLoading(false);
 
@@ -726,14 +711,12 @@ export function normalizeContainersInGroups(groups) {
             hasChanges = true;
 
             if (mainStorage.inited) {
-                backgroundSelf.sendMessageFromBackground('group-updated', {
-                    group: {
-                        id: group.id,
-                        newTabContainer: group.newTabContainer,
-                        catchTabContainers: group.catchTabContainers,
-                        excludeContainersForReOpen: group.excludeContainersForReOpen,
-                    },
-                });
+                sendUpdated({
+                    id: group.id,
+                    newTabContainer: group.newTabContainer,
+                    catchTabContainers: group.catchTabContainers,
+                    excludeContainersForReOpen: group.excludeContainersForReOpen,
+                }, group);
             }
         }
     };

@@ -238,24 +238,25 @@ export default {
                     this.openOptionsPage('backup/sync');
                 }
             });
+        },
 
-            this.$on('group-removed', request => {
-                if (this.groupToShow?.id === request.groupId) {
-                    this.showSectionDefault();
-                }
-            });
-            this.$on('group-loaded-ready', request => {
-                if (this.options.openGroupAfterChange) {
-                    if (this.currentGroup?.id === request.groupId && this.currentGroup !== this.groupToShow) {
-                        this.showSectionGroupTabs(this.currentGroup);
-                    }
-                }
+        onGroupRemoved(request) {
+            if (this.groupToShow?.id === request.groupId) {
+                this.showSectionDefault();
+            }
+        },
 
-                if (request.addTabs.length) {
-                    const group = this.groups.find(gr => gr.id === request.groupId);
-                    group.tabs.push(...request.addTabs.map(this.mapTab, this));
+        onGroupLoadedReady(request) {
+            if (this.options.openGroupAfterChange) {
+                if (this.currentGroup?.id === request.groupId && this.currentGroup !== this.groupToShow) {
+                    this.showSectionGroupTabs(this.currentGroup);
                 }
-            });
+            }
+
+            if (request.addTabs.length) {
+                const group = this.groups.find(gr => gr.id === request.groupId);
+                group.tabs.push(...request.addTabs.map(this.mapTab, this));
+            }
         },
 
         showSectionGroupTabs(group) {
@@ -488,17 +489,8 @@ export default {
             this.unSyncTabs = [];
         },
         async unsyncHiddenTabsShowTabIntoCurrentWindow(tab) {
-            await this.sendMessageModule('Tabs.moveNative', [tab.id], {
-                windowId: this.currentWindow.id,
-                index: -1,
-            });
-
-            await this.sendMessageModule('Tabs.show', tab.id);
-
             if (this.currentGroup) {
-                this.unSyncTabs.splice(this.unSyncTabs.indexOf(tab), 1);
-            } else {
-                this.loadUnsyncedTabs();
+                await this.sendMessageModule('Tabs.move', [tab.id], this.currentGroup.id);
             }
         },
 

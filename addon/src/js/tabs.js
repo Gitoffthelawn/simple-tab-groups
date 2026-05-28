@@ -68,32 +68,33 @@ function send(action, data) {
     });
 }
 
-// TODO temp
-export async function sendGroupUpdated(groupId) {
-    const {group} = await Groups.load(groupId, true);
-
+export function sendUpdatedGroup(groupId) {
     send('updated.group', {
         groupId,
-        tabs: group.tabs,
     });
 }
 
 // listeners
-const updatedBatch = new BatchProcessor(async (tabIds, groupId) => {
-    logger.log('updatedBatch', groupId);
+const updatedBatch = new BatchProcessor(async (tabIds, groupKey) => {
+    logger.log('updatedBatch', groupKey);
 
-    if (groupId === 'unsync') {
-        const windows = await Windows.load(true, true, settings.showTabsWithThumbnailsInManageGroups);
-        send('updated.all', {
-            windows,
-        });
-    } else {
-        const {group} = await Groups.load(groupId, true, true, settings.showTabsWithThumbnailsInManageGroups);
-        send('updated.group', {
-            groupId,
-            tabs: group.tabs,
-        });
+    // 'unsync:<windowId>'
+    if (groupKey.startsWith('unsync:')) {
+        const windowId = Number(groupKey.split(':', 2)[1]);
+        send('updated.unsync', {windowId});
+        return;
     }
+
+    if (groupKey === 'unsync') {
+        // fallback: broadcast per-window unsync for all windows
+        const windows = await Windows.load(false);
+        for (const win of windows) {
+            send('updated.unsync', {windowId: win.id});
+        }
+        return;
+    }
+
+    sendUpdatedGroup(groupKey);
 });
 
 export function skipTrackingWindow(windowId) {
@@ -163,7 +164,7 @@ async function onCreated(tab) {
 
     Cache.applyTabSession(tab);
 
-    updatedBatch.add(tab.id, tab.groupId || 'unsync');
+    updatedBatch.add(tab.id, tab.groupId || `unsync:${tab.windowId}`);
 }
 
 async function onActivated({tabId, windowId, previousTabId = null}) {
@@ -251,16 +252,20 @@ async function onUpdated(tabId, changeInfo, tab) {
     }
 
     if (Object.hasOwn(changeInfo, 'pinned') || Object.hasOwn(changeInfo, 'hidden')) {
+        let tabGroupId;
+
         if (changeInfo.pinned || changeInfo.hidden) {
             changeInfo.pinned && log.log('remove group for pinned tab', tab.id);
             changeInfo.hidden && log.log('remove group for hidden tab', tab.id);
-
+            tabGroupId = Cache.getTabGroup(tab.id);
             await Cache.removeTabGroup(tab.id).catch(() => {});
         } else if (changeInfo.pinned === false) {
             log.log('tab is unpinned', tab.id);
 
             await Cache.setTabGroup(tab.id, null, tab.windowId)
                 .catch(log.onCatch(["can't set group to tab, !pinned", tab.id], false));
+
+            tabGroupId = Cache.getTabGroup(tab.id);
         } else if (changeInfo.hidden === false) {
             log.log('tab is showing', tab.id);
 
@@ -274,8 +279,13 @@ async function onUpdated(tabId, changeInfo, tab) {
                 log.log('call setTabGroup for tab', tab.id);
                 await Cache.setTabGroup(tab.id, null, tab.windowId)
                     .catch(log.onCatch(["can't set group to tab, !hidden", tab.id], false));
+
+                tabGroupId = Cache.getTabGroup(tab.id);
             }
         }
+
+        tabGroupId && updatedBatch.add(tab.id, tabGroupId);
+        updatedBatch.add(tab.id, `unsync:${tab.windowId}`);
 
         log.stop();
         return;
@@ -300,7 +310,7 @@ function onRemoved(tabId, {isWindowClosing, windowId}) {
 
     const groupId = Cache.getTabGroup(tabId);
 
-    updatedBatch.delete(tabId, groupId || 'unsync');
+    updatedBatch.delete(tabId, groupId || `unsync:${windowId}`);
 
     if (silent) {
         Cache.removeTab(tabId);
@@ -357,7 +367,7 @@ async function onMoved(tabId, {windowId, /* fromIndex, toIndex */}) {
 
     logger.log(onMoved, {tabId, groupId});
 
-    updatedBatch.add(tabId, groupId || 'unsync');
+    updatedBatch.add(tabId, groupId || `unsync:${windowId}`);
 
     /*
     if (Cache.getTabGroup(tabId)) {
@@ -388,7 +398,7 @@ async function onDetached(tabId, {oldWindowId}) { // notice: called before onAtt
 
     logger.log(onDetached, {tabId, oldWindowId, groupId});
 
-    updatedBatch.add(tabId, groupId || 'unsync');
+    updatedBatch.add(tabId, groupId || `unsync:${oldWindowId}`);
 }
 
 async function onAttached(tabId, {newWindowId}) { // called when tabs.move()
@@ -418,7 +428,7 @@ async function onAttached(tabId, {newWindowId}) { // called when tabs.move()
 
     log.log('groupId', groupId);
 
-    updatedBatch.add(tabId, groupId || 'unsync');
+    updatedBatch.add(tabId, groupId || `unsync:${newWindowId}`);
 
     log.stop();
 }
@@ -841,11 +851,7 @@ export async function add(groupId, cookieStoreId, url, title) {
         await hide(tab, true);
     }
 
-    ({group} = await Groups.load(groupId, true, true, settings.showTabsWithThumbnailsInManageGroups));
-    send('updated.group', {
-        groupId,
-        tabs: group.tabs,
-    });
+    sendUpdatedGroup(groupId);
 
     log.stop(tab);
     return tab;
@@ -1055,7 +1061,7 @@ export async function move(tabIds, groupId, params = {}) {
 
         await Promise.all(tabs.map(tab => Cache.setTabGroup(tab.id, groupId)));
 
-        backgroundSelf.sendMessageFromBackground('groups-updated'); // TODO
+        Groups.sendUpdatedAll();
 
         log.log('end moving');
     }

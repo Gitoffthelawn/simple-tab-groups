@@ -253,7 +253,7 @@ async function runGrandRestore(restoredWindowIds) {
 
             // удаляем вкладки востановленной группы которых нет в других группах
             if (otherSameGroupsAllWindows.size) {
-                const allOtherTabs = Utils.concatTabs(Array.from(otherSameGroupsAllWindows.values()));
+                const allOtherTabs = Utils.flatTabs(Array.from(otherSameGroupsAllWindows.values()));
 
                 for (const tab of groupToKeep.tabs) {
                     // если вкладка из другого окна - пропускаем
@@ -766,7 +766,7 @@ export async function tryRestoreMissedTabs(actionLoading = true) {
     }
 
     if (tabsNeedRestore.length) {
-        self.sendMessageFromBackground('groups-updated');
+        Groups.sendUpdatedAll();
     }
 
     if (actionLoading) {

@@ -185,10 +185,6 @@ export default {
         },
 
         addGroup() {
-            this.$once('group-added', () => {
-                this.$nextTick(() => [...document.querySelectorAll('input[type="text"]')].pop().select());
-            });
-
             this.sendMessageModule('Groups.add');
         },
 

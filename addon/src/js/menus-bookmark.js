@@ -282,7 +282,7 @@ export async function openInGroup(groupId, info) {
 
         await Browser.actionLoading(false);
 
-        Tabs.sendGroupUpdated(groupId);
+        Tabs.sendUpdatedGroup(groupId);
 
         if (info.button.RIGHT) {
             await self.applyGroup(undefined, groupId, createdTabs[0].id);
@@ -359,7 +359,7 @@ export async function createNewGroup(info) {
                 const newGroup = await Groups.add(undefined, undefined, folder.title);
                 const createdTabs = await Tabs.createMultiple(Groups.setNewTabsParams(tabsToCreate, newGroup), true);
                 await Tabs.hide(createdTabs, true);
-                await Tabs.sendGroupUpdated(newGroup.id);
+                Tabs.sendUpdatedGroup(newGroup.id);
                 groupsCreatedCount++;
             }
         }

@@ -4,6 +4,11 @@
 import * as Messages from '/js/messages.js';
 
 export default {
+    data() {
+        window.$vm = this;
+
+        return {};
+    },
     methods: {
         openDebugPage() {
             Messages.sendMessage('open-debug-page');
