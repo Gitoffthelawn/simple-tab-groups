@@ -1,6 +1,5 @@
 
 import * as Constants from '/js/constants.js';
-import * as Messages from '/js/messages.js';
 import * as Storage from '/js/storage.js';
 import * as Utils from '/js/utils.js';
 import Logger from '/js/logger.js';
@@ -8,21 +7,7 @@ import Logger from '/js/logger.js';
 const MODULE_NAME = 'options.mixin';
 const logger = new Logger(MODULE_NAME, [Utils.getNameFromPath(location.href)]);
 
-const instances = new Set;
-
-const {sendMessageModule} = Messages.connectToBackground(MODULE_NAME, 'options-updated', ({keys}) => {
-    logger.info('got message', keys);
-
-    for (const instance of instances) {
-        if (instance.$options.name === Constants.MODULES.OPTIONS && keys.join() === 'hotkeys') {
-            // do not update hotkeys on options page to prevent removing duplicated hotkeys
-            logger.info('🛑 prevent update hotkeys into options page');
-            return;
-        }
-
-        instance.optionsReload(keys);
-    }
-});
+let colorSchemeMediaListenerAdded = false;
 
 export default {
     data() {
@@ -31,12 +16,21 @@ export default {
         };
     },
     created() {
-        if (!instances.size) {
+        if (!colorSchemeMediaListenerAdded) {
+            colorSchemeMediaListenerAdded = true;
             window.matchMedia('(prefers-color-scheme: dark)')
                 .addEventListener('change', () => this.optionsUpdateColorScheme());
         }
 
-        instances.add(this);
+        this.$root.$on('options-updated', ({keys = []} = {}) => {
+            if (this.$options.name === Constants.MODULES.OPTIONS && keys.join() === 'hotkeys') {
+                logger.info('🛑 prevent update hotkeys into options page');
+                return;
+            }
+
+            logger.info('options-updated event, keys:', keys);
+            this.optionsReload(keys);
+        });
 
         this.optionsLoadPromise = this.optionsReload();
     },
@@ -44,7 +38,8 @@ export default {
         'options.colorScheme': 'optionsUpdateColorScheme',
     },
     beforeDestroy() {
-        instances.delete(this);
+        // remove any local listeners
+        this.optionsUnwatchers.forEach(unwatch => unwatch());
     },
     methods: {
         async optionsReload(updateKeys = Constants.ALL_OPTION_KEYS) {
@@ -87,7 +82,7 @@ export default {
             this.optionsUnwatchers.add(unwatch);
         },
         async optionsSave(key, value) {
-            return await sendMessageModule('BG.saveOptions', {[key]: value});
+            return await this.sendMessageModule('BG.saveOptions', {[key]: value});
         },
         optionsUpdateColorScheme() {
             if (this.options.colorScheme === 'auto') {

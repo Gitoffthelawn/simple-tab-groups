@@ -3,15 +3,12 @@ import '/js/prefixed-storage.js';
 import {objectToNativeError} from '/js/logger.js';
 import * as Constants from '/js/constants.js';
 import * as Utils from '/js/utils.js';
-import * as Messages from '/js/messages.js';
 import * as Cloud from '/js/sync/cloud/cloud.js';
 
-const MODULE_NAME = 'sync-cloud.mixin';
+// const MODULE_NAME = 'sync-cloud.mixin';
 // const logger = new Logger(MODULE_NAME, [Utils.getNameFromPath(location.href)]);
 
 const storage = localStorage.create(Constants.MODULES.CLOUD);
-
-const {sendMessageModule} = Messages.connectToBackground(MODULE_NAME);
 
 export default {
     data() {
@@ -74,7 +71,7 @@ export default {
             clearTimeout(this.syncCloudInProgressTimer);
         },
         async syncCloud(trust, revision) {
-            return await sendMessageModule('BG.cloudSync', {trust, revision});
+            return await this.sendMessageModule('BG.cloudSync', {trust, revision});
         },
         syncCloudUpdateInfo() {
             if (storage.lastUpdate) {

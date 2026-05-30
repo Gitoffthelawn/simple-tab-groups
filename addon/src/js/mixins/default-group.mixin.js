@@ -1,6 +1,5 @@
 
 import * as Groups from '/js/groups.js';
-import * as Messages from '/js/messages.js';
 
 export default {
     data() {
@@ -20,7 +19,7 @@ export default {
 
         saveDefaultGroup(changes) {
             this.openEditDefaultGroup = false;
-            Messages.sendMessageModule('Groups.saveDefault', changes);
+            this.sendMessageModule('Groups.saveDefault', changes);
         },
     },
 }

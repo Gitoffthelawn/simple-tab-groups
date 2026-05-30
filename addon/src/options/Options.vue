@@ -11,7 +11,6 @@ import backupLocationHost from './backup-location-host.vue';
 
 import '/js/prefixed-storage.js';
 import * as Constants from '/js/constants.js';
-import * as Messages from '/js/messages.js';
 import Logger, {errorEventHandler} from '/js/logger.js';
 import Notification from '/js/notification.js';
 import Lang from '/js/lang.js?translate-page';
@@ -30,13 +29,14 @@ import {isValidHotkeyValue, eventToHotkeyValue} from '/js/hotkeys.js';
 import JSON from '/js/json.js';
 import Migration from '/js/migration.js';
 
-import defaultGroupMixin from '/js/mixins/default-group.mixin.js';
 import globalMixin from '/js/mixins/global.mixin.js';
+import defaultGroupMixin from '/js/mixins/default-group.mixin.js';
 import optionsMixin from '/js/mixins/options.mixin.js';
 
 window.logger = new Logger(Constants.MODULES.OPTIONS);
 
 Vue.config.errorHandler = errorEventHandler.bind(window.logger);
+Vue.mixin(globalMixin);
 
 const SECTION_GENERAL = 'general';
 const SECTION_HOTKEYS = 'hotkeys';
@@ -57,16 +57,10 @@ const HASH = {
     },
 };
 
-const {
-    sendMessage,
-    sendMessageModule,
-} = Messages.connectToBackground(Constants.MODULES.OPTIONS);
-
 export default {
     name: Constants.MODULES.OPTIONS,
     mixins: [
         defaultGroupMixin,
-        globalMixin,
         optionsMixin,
     ],
     data() {
@@ -221,6 +215,8 @@ export default {
         'backup-location-host': backupLocationHost,
     },
     created() {
+        window.$vm = this;
+
         this.groupsOffListeners = new Set;
         this.groupsOffListeners.add(Groups.on(['added', 'removed', 'updated', 'updated.all'], () => this.loadGroups()));
 
@@ -384,11 +380,11 @@ export default {
 
             this.showLoadingMessage = true;
 
-            sendMessageModule('BG.restoreBackup', data, clearAddonData);
+            this.sendMessageModule('BG.restoreBackup', data, clearAddonData);
         },
 
         exportAddonSettings() {
-            sendMessage('create-backup', {
+            this.sendMessage('create-backup', {
                 includeTabFavIcons: this.includeTabFavIconsIntoBackup,
                 includeTabThumbnails: this.includeTabThumbnailsIntoBackup,
             });
@@ -676,7 +672,7 @@ export default {
         runClearAddonConfirm() {
             this.showClearAddonConfirmPopup = false;
             this.showLoadingMessage = true;
-            sendMessageModule('BG.clearAddon');
+            this.sendMessageModule('BG.clearAddon');
         },
 
         createHotkey() {

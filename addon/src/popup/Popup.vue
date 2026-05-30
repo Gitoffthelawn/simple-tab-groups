@@ -32,6 +32,7 @@ const MODULE_NAME = isSidebar ? Constants.MODULES.SIDEBAR : Constants.MODULES.PO
 
 window.logger = new Logger(MODULE_NAME);
 Vue.config.errorHandler = errorEventHandler.bind(window.logger);
+Vue.mixin(globalMixin);
 
 const storage = localStorage.create(Constants.MODULES.POPUP);
 
@@ -44,7 +45,6 @@ export default {
     name: Constants.MODULES.POPUP,
     mixins: [
         defaultGroupMixin,
-        globalMixin,
         optionsMixin,
         popupHelpersMixin,
         syncCloudMixin,
@@ -84,6 +84,9 @@ export default {
         'context-menu-tab': contextMenuTab,
         'context-menu-tab-new': contextMenuTabNew,
         'context-menu-group': contextMenuGroup,
+    },
+    created() {
+        window.$vm = this;
     },
     async mounted() {
         const log = window.logger.start('mounted');

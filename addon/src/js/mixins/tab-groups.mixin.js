@@ -2,50 +2,19 @@
 import Vue from '/js/vue.runtime.esm.js';
 
 import '/js/prefixed-storage.js';
-import Logger from '/js/logger.js';
 import * as Constants from '/js/constants.js';
 import * as Containers from '/js/containers.js';
 import * as Tabs from '/js/tabs.js';
 import * as Groups from '/js/groups.js';
 import * as Utils from '/js/utils.js';
-import * as Messages from '/js/messages.js';
 import * as Windows from '/js/windows.js';
 import * as Cloud from '/js/sync/cloud/cloud.js';
 
-const MODULE_NAME = 'tab-groups.mixin';
-const logger = new Logger(MODULE_NAME, [Utils.getNameFromPath(location.href)]);
-
 const mainStorage = localStorage.create(Constants.MODULES.BACKGROUND);
-
 const isManage = location.href.startsWith(Constants.PAGES.MANAGE);
-
-const instances = new Set;
-
-const {
-    sendMessage,
-    sendMessageModule,
-    disconnect,
-} = Messages.connectToBackground(MODULE_NAME, 'lock-addon', (syncEvent) => {
-    logger.info('got message', syncEvent.action, syncEvent);
-
-    if (syncEvent.action !== 'lock-addon') {
-        return;
-    }
-
-    disconnect();
-
-    for (const instance of instances) {
-        instance.tabGroupsHandleLockAddon();
-    }
-});
-
-const startUpDataPromise = sendMessage('get-startup-data', {isManage});
 
 export default {
     data() {
-        this.sendMessage = sendMessage;
-        this.sendMessageModule = sendMessageModule;
-
         this.isManage = isManage;
 
         return {
@@ -116,15 +85,18 @@ export default {
         },
     },
     created() {
-        instances.add(this);
+        this.startUpDataPromise = this.sendMessage('get-startup-data', {isManage});
         this.containers = this.getContainers();
+
+        this.$root.$on('lock-addon', () => {
+            this.tabGroupsHandleLockAddon();
+        });
     },
     beforeDestroy() {
-        instances.delete(this);
         this.tabGroupsRemoveListeners();
     },
     mounted() { // called before mounted in .vue files
-        this.tabGroupsPromise = this.tabGroupsLoad(startUpDataPromise);
+        this.tabGroupsPromise = this.tabGroupsLoad(this.startUpDataPromise);
     },
     methods: {
         async loadWindowsAndGroups(startUpData = {}) {
@@ -132,7 +104,7 @@ export default {
             await this.loadGroups(startUpData);
         },
 
-        async tabGroupsLoad(startUpDataPromise = sendMessage('get-startup-data', {isManage})) {
+        async tabGroupsLoad(startUpDataPromise = this.sendMessage('get-startup-data', {isManage})) {
             const startUpData = await startUpDataPromise;
 
             await this.loadWindowsAndGroups(startUpData);
@@ -238,10 +210,10 @@ export default {
 
         async loadWindows({windows} = {}) {
             this.currentWindow = await Windows.get();
-            this.openedWindows = windows ?? await sendMessageModule('Windows.load');
+            this.openedWindows = windows ?? await this.sendMessageModule('Windows.load');
         },
         async loadGroups({groups} = {}) {
-            groups ??= await sendMessageModule('Groups.load', null, true, true, this.includeTabThumbnails)
+            groups ??= await this.sendMessageModule('Groups.load', null, true, true, this.includeTabThumbnails)
                 .then(({groups}) => groups);
 
             this.groups = groups.map(this.mapGroup, this);
@@ -250,7 +222,7 @@ export default {
         },
         async loadUnsyncedTabs({windows = null, windowId = null} = {}) {
             if (!windowId || this.currentWindow?.id === windowId) {
-                windows ??= await sendMessageModule('Windows.load', true, true, this.includeTabThumbnails);
+                windows ??= await this.sendMessageModule('Windows.load', true, true, this.includeTabThumbnails);
 
                 const win = windows.find(w => windowId ? w.id === windowId : w.id === this.currentWindow.id);
 
@@ -271,11 +243,13 @@ export default {
             group.isMoving = false;
             group.isOver = false;
 
+            const vm = this;
+
             return new Vue({
                 data: group,
                 watch: {
                     title(title) {
-                        sendMessageModule('Groups.update', this.id, {title});
+                        vm.sendMessageModule('Groups.update', this.id, {title});
                     },
                 },
                 computed: {
@@ -348,24 +322,24 @@ export default {
         },
 
         addTab(group, cookieStoreId) {
-            sendMessageModule('Tabs.add', group.id, cookieStoreId);
+            this.sendMessageModule('Tabs.add', group.id, cookieStoreId);
         },
         removeTab(tab) {
-            sendMessageModule('Tabs.remove', this.getTabIdsForMove(tab.id));
+            this.sendMessageModule('Tabs.remove', this.getTabIdsForMove(tab.id));
         },
 
         reloadTab(tab, bypassCache) {
-            sendMessageModule('Tabs.reload', this.getTabIdsForMove(tab.id), bypassCache);
+            this.sendMessageModule('Tabs.reload', this.getTabIdsForMove(tab.id), bypassCache);
         },
         reloadAllTabsInGroup(group, bypassCache) {
-            sendMessageModule('Tabs.reload', group.tabs.map(Tabs.extractId), bypassCache);
+            this.sendMessageModule('Tabs.reload', group.tabs.map(Tabs.extractId), bypassCache);
         },
 
         discardTab(tab) {
-            sendMessageModule('Tabs.discard', this.getTabIdsForMove(tab.id));
+            this.sendMessageModule('Tabs.discard', this.getTabIdsForMove(tab.id));
         },
         discardGroup(group) {
-            sendMessageModule('Tabs.discard', group.tabs.map(Tabs.extractId));
+            this.sendMessageModule('Tabs.discard', group.tabs.map(Tabs.extractId));
         },
         discardOtherGroups(groupExclude) {
             const groupsToDiscard = this.groups.filter(group => {
@@ -382,15 +356,15 @@ export default {
 
             const tabsToDiscard = Utils.flatTabs(groupsToDiscard);
 
-            sendMessageModule('Tabs.discard', tabsToDiscard.map(Tabs.extractId));
+            this.sendMessageModule('Tabs.discard', tabsToDiscard.map(Tabs.extractId));
         },
         async moveTabs(tabId, groupId, loadUnsync = false, showTabAfterMovingItIntoThisGroup, discardTabs) {
             const tabIds = this.getTabIdsForMove(tabId);
 
-            await sendMessageModule('Tabs.move', tabIds, groupId, {showTabAfterMovingItIntoThisGroup});
+            await this.sendMessageModule('Tabs.move', tabIds, groupId, {showTabAfterMovingItIntoThisGroup});
 
             if (discardTabs) {
-                sendMessageModule('Tabs.discard', tabIds);
+                this.sendMessageModule('Tabs.discard', tabIds);
             }
 
             if (loadUnsync) {
@@ -399,7 +373,7 @@ export default {
         },
 
         async loadGroupTabs(groupId) {
-            const {group: {tabs}} = await sendMessageModule('Groups.load', groupId, true, true, this.includeTabThumbnails);
+            const {group: {tabs}} = await this.sendMessageModule('Groups.load', groupId, true, true, this.includeTabThumbnails);
             const group = this.groups.find(gr => gr.id === groupId);
 
             group.tabs = tabs.map(tab => this.mapTab(tab, group.isArchive));
@@ -412,18 +386,18 @@ export default {
             this.groupToEdit = null;
 
             if (Object.keys(changes).length) {
-                sendMessageModule('Groups.update', groupId, changes);
+                this.sendMessageModule('Groups.update', groupId, changes);
             }
         },
 
 
         async unloadGroup(group) {
             this.isLoading = true;
-            await sendMessageModule('Groups.unload', group.id);
+            await this.sendMessageModule('Groups.unload', group.id);
             this.isLoading = false;
         },
         sortGroups(vector) {
-            sendMessageModule('Groups.sort', vector);
+            this.sendMessageModule('Groups.sort', vector);
         },
         isOpenedGroup(group) {
             return this.openedWindows.some(win => win.groupId === group.id);
@@ -437,13 +411,13 @@ export default {
 
             if (ok) {
                 this.isLoading = true;
-                await sendMessageModule('Groups.archiveToggle', id);
+                await this.sendMessageModule('Groups.archiveToggle', id);
                 this.isLoading = false;
             }
         },
 
         exportGroupToBookmarks(group) {
-            sendMessage('export-group-to-bookmarks', {
+            this.sendMessage('export-group-to-bookmarks', {
                 groupId: group.id,
             });
         },

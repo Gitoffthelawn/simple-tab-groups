@@ -26,6 +26,7 @@ import tabGroupsMixin from '/js/mixins/tab-groups.mixin.js';
 
 window.logger = new Logger(Constants.MODULES.MANAGE);
 Vue.config.errorHandler = errorEventHandler.bind(window.logger);
+Vue.mixin(globalMixin);
 
 const storage = localStorage.create(Constants.MODULES.MANAGE);
 
@@ -40,7 +41,6 @@ export default {
     name: Constants.MODULES.MANAGE,
     mixins: [
         defaultGroupMixin,
-        globalMixin,
         optionsMixin,
         popupHelpersMixin,
         tabGroupsMixin,
@@ -63,6 +63,9 @@ export default {
         'context-menu-tab': contextMenuTab,
         'context-menu-tab-new': contextMenuTabNew,
         'context-menu-group': contextMenuGroup,
+    },
+    created() {
+        window.$vm = this;
     },
     async mounted() {
         const log = window.logger.start('mounted');
