@@ -600,6 +600,7 @@ async function onBackgroundMessage(message, sender) {
         const {
             group: currentGroup,
             groups,
+            groupsById,
             notArchivedGroups,
         } = await Groups.load(currentWindow.groupId);
 
@@ -671,7 +672,7 @@ async function onBackgroundMessage(message, sender) {
                         result.ok = await Groups.apply(currentWindow.id, group.id);
                     }
                 } else if (data.groupId) {
-                    let groupToLoad = groups.find(group => group.id === data.groupId);
+                    let groupToLoad = groupsById.get(data.groupId);
 
                     if (groupToLoad) {
                         if (groupToLoad.isArchive) {
@@ -800,7 +801,7 @@ async function onBackgroundMessage(message, sender) {
                         });
                     }
                 } else if (data.groupId && !data.title) {
-                    let groupToRename = groups.find(group => group.id === data.groupId);
+                    let groupToRename = groupsById.get(data.groupId);
 
                     if (groupToRename) {
                         let activeTab = await Tabs.getActive();
@@ -831,7 +832,7 @@ async function onBackgroundMessage(message, sender) {
                         result = await onBackgroundMessage('rename-group', sender);
                     }
                 } else if (data.groupId && data.title && typeof data.title === 'string') {
-                    let groupToRename = groups.find(group => group.id === data.groupId);
+                    let groupToRename = groupsById.get(data.groupId);
 
                     if (groupToRename) {
                         Groups.update(groupToRename.id, {
@@ -973,7 +974,7 @@ async function onBackgroundMessage(message, sender) {
 
                     result.ok = ok;
                 } else if (data.groupId) {
-                    let groupMoveTo = groups.find(group => group.id === data.groupId);
+                    let groupMoveTo = groupsById.get(data.groupId);
 
                     if (groupMoveTo) {
                         if (groupMoveTo.isArchive) {
@@ -1011,9 +1012,7 @@ async function onBackgroundMessage(message, sender) {
                 break;
             case 'discard-group':
                 {
-                    const { groups, notArchivedGroups } = await Groups.load(null, true);
-
-                    let groupToDiscard = groups.find(group => group.id === data.groupId);
+                    const {group: groupToDiscard, notArchivedGroups} = await Groups.load(data.groupId, true);
 
                     if (groupToDiscard) {
                         if (groupToDiscard.isArchive) {
@@ -1084,8 +1083,7 @@ async function onBackgroundMessage(message, sender) {
                 break;
             case 'get-current-group':
                 if (Number.isSafeInteger(data.windowId) && data.windowId > 0) {
-                    let groupId = Cache.getWindowGroup(data.windowId),
-                        group = groups.find(gr => gr.id === groupId);
+                    let group = groupsById.get(Cache.getWindowGroup(data.windowId));
 
                     if (group) {
                         group = Groups.mapForExternalExtension(group);
@@ -1099,7 +1097,7 @@ async function onBackgroundMessage(message, sender) {
 
                 break;
             case 'exclude-container-for-group':
-                let group = groups.find(group => group.id === data.groupId);
+                let group = groupsById.get(data.groupId);
 
                 if (!group || !data.cookieStoreId || Containers.get(data.cookieStoreId).cookieStoreId !== data.cookieStoreId) {
                     throw new Error('invalid groupId or cookieStoreId');

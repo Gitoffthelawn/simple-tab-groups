@@ -91,9 +91,8 @@ async function applyNow(windowId, groupId, activeTabId, applyFromHistory = false
         } else {
             // magic
 
-            const {group: groupToShow, groups} = await load(groupId, true);
-            const oldGroupId = Cache.getWindowGroup(windowId);
-            const groupToHide = groups.find(gr => gr.id === oldGroupId);
+            const {group: groupToShow, groupsById} = await load(groupId, true);
+            const groupToHide = groupsById.get(Cache.getWindowGroup(windowId));
             const tabsIdsToRemove = new Set;
 
             if (!groupToShow) {
@@ -365,6 +364,7 @@ export async function load(groupId = null, withTabs = false, params) {
     return {
         group: groups[groupIndex],
         groups,
+        groupsById: new Map(groups.map(group => [group.id, group])),
         groupIndex,
         archivedGroups: groups.filter(group => group.isArchive),
         notArchivedGroups: groups.filter(group => !group.isArchive),

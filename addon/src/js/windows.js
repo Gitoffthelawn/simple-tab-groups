@@ -790,8 +790,7 @@ async function tryRestoreMissedTabsNow(actionLoading = true) {
     const allTabs = await Tabs.query({pinned: false});
 
     // strict find exist tabs
-    const {groups} = await Groups.load();
-    const groupsById = new Map(groups.filter(group => !group.isArchive).map(group => [group.id, group]));
+    const {groupsById} = await Groups.load();
 
     const existTabs = new Set();
 
@@ -799,8 +798,8 @@ async function tryRestoreMissedTabsNow(actionLoading = true) {
     for (const [groupId, savedTabs] of Map.groupBy(tabsToRestore, tab => tab.groupId)) {
         const group = groupsById.get(groupId);
 
-        // if no groupId, or group not found
-        if (!group) {
+        // if no groupId, or group not found, or archived
+        if (!group || group.isArchive) {
             continue;
         }
 
