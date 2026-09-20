@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Les onglets suivants ne peuvent être masqués car ils sont épinglés, utilisent le microphone ou la caméra, ou sont partagés: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ onglets ont été déplacés.\nCliquez ici pour ouvrir le premier onglet.",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

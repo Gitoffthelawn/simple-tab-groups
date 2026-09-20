@@ -104,10 +104,6 @@ async function applyNow(windowId, groupId, activeTabId, applyFromHistory = false
                 throw '';
             }
 
-            if (groupToHide) {
-                await beforeUnload(groupToHide);
-            }
-
             await Browser.actionLoading();
 
             // show tabs
@@ -126,7 +122,9 @@ async function applyNow(windowId, groupId, activeTabId, applyFromHistory = false
             await Cache.setWindowGroup(windowId, groupToShow.id);
 
             // hide tabs
-            await hideTabs(groupToHide, groupToHide?.tabs);
+            if (groupToHide) {
+                groupToHide.tabs = await hideTabs(groupToHide, groupToHide.tabs);
+            }
 
             const activeTabGroupToHide = groupToHide?.tabs.find(tab => tab.active);
 
@@ -877,57 +875,35 @@ export async function showTabs(group = null, tabs = [], params) {
 }
 
 export async function hideTabs(group = null, tabs = [], params) {
-    tabs = tabs.filter(Tabs.isCanBeHidden);
+    const tabsToHide = await pinSharingTabs(tabs.filter(tab => !Tabs.isPinned(tab)));
 
-    await Tabs.hide(tabs, params);
+    await Tabs.hide(tabsToHide, params);
 
     if (group?.muteTabsWhenGroupCloseAndRestoreWhenOpen) {
-        await Tabs.setMute(tabs, true);
+        await Tabs.setMute(tabsToHide, true);
     } else {
-        await Tabs.setMute(tabs, false, {onlyMutedBySelf: true});
+        await Tabs.setMute(tabsToHide, false, {onlyMutedBySelf: true});
     }
 
     if (group?.discardTabsAfterHide) {
         if (group.discardExcludeAudioTabs) {
-            await Tabs.discard(tabs.filter(tab => !tab.audible), params);
+            await Tabs.discard(tabsToHide.filter(tab => !tab.audible), params);
         } else {
-            await Tabs.discard(tabs, params);
+            await Tabs.discard(tabsToHide, params);
         }
     }
+
+    return tabsToHide;
 }
 
-// the tail of a restore, after Tabs.createMultiple: the group's live tabs are sorted into the saved
-// order, then the native groups - a loaded group gets GroupsNative.apply over its WHOLE live list
-// (reloaded for it: the caller's group object holds the saved tabs), an unloaded one is stripped
-// (the sort can drop hidden tabs onto live-member slots, docs/TABGROUPS-BEHAVIOR.md §11, §12) and
-// hidden by the group's options (hideTabs) - and the links go last: sort first, link last
-// (docs/OPENER-BEHAVIOR.md Implications 8)
-export async function settleTabs(group, savedTabs, {live, aligned}) {
-    const tabs = await Tabs.ensureSorted(live);
-    const windowId = Cache.getWindowId(group.id);
-
-    if (windowId) {
-        const {group: loadedGroup} = await load(group.id, true);
-
-        await GroupsNative.apply(windowId, loadedGroup)
-            .catch(logger.onCatch(['cant apply native groups', group.id], false));
-    } else {
-        await hideTabs(group, tabs);
-    }
-
-    await Tabs.applyOpeners(savedTabs, aligned);
-
-    return tabs.map(Cache.applyTabSession);
-}
-
-async function beforeUnload(group) {
-    const tabsToPin = group.tabs.filter(Tabs.isCanNotBeHidden);
+export async function pinSharingTabs(tabs) {
+    const tabsToPin = tabs.filter(Tabs.isSharing);
 
     if (!tabsToPin.length) {
-        return;
+        return tabs;
     }
 
-    const log = logger.start(beforeUnload, group.id, tabsToPin.map(Tabs.extractId));
+    const log = logger.start(pinSharingTabs, tabsToPin.map(Tabs.extractId));
 
     // pinning strips the native membership itself (docs/TABGROUPS-BEHAVIOR.md §19)
     await Tabs.pin(tabsToPin);
@@ -937,8 +913,6 @@ async function beforeUnload(group) {
         Cache.removeTabNativeGroupId(tab.id),
     ]));
 
-    group.tabs = group.tabs.filter(tab => !tabsToPin.includes(tab));
-
     let showNotif = mainStorage.thisTabsWerePinned ?? 0;
 
     if (showNotif < 3) {
@@ -947,6 +921,32 @@ async function beforeUnload(group) {
     }
 
     log.stop();
+
+    return tabs.filter(tab => !tabsToPin.includes(tab));
+}
+
+// the tail of a restore, after Tabs.createMultiple: the group's live tabs are sorted into the saved
+// order, then the native groups - a loaded group gets GroupsNative.apply over its WHOLE live list
+// (reloaded for it: the caller's group object holds the saved tabs), an unloaded one is stripped
+// (the sort can drop hidden tabs onto live-member slots, docs/TABGROUPS-BEHAVIOR.md §11, §12) and
+// hidden by the group's options (hideTabs) - and the links go last: sort first, link last
+// (docs/OPENER-BEHAVIOR.md Implications 8)
+export async function settleTabs(group, savedTabs, {live, aligned}) {
+    let tabs = await Tabs.ensureSorted(live);
+    const windowId = Cache.getWindowId(group.id);
+
+    if (windowId) {
+        const {group: loadedGroup} = await load(group.id, true);
+
+        await GroupsNative.apply(windowId, loadedGroup)
+            .catch(logger.onCatch(['cant apply native groups', group.id], false));
+    } else {
+        tabs = await hideTabs(group, tabs);
+    }
+
+    await Tabs.applyOpeners(savedTabs, aligned);
+
+    return tabs.map(Cache.applyTabSession);
 }
 
 export function unload(...args) {
@@ -984,8 +984,6 @@ async function unloadNow(groupId) {
         return false;
     }
 
-    await beforeUnload(group);
-
     log.log('windowId', windowId);
 
     await Browser.actionLoading();
@@ -997,7 +995,7 @@ async function unloadNow(groupId) {
     await showTabs(null, unsyncTabs);
 
     // sessions keep the membership of hidden tabs - nothing to save here
-    await hideTabs(group, group.tabs, {activateOther: true});
+    group.tabs = await hideTabs(group, group.tabs, {activateOther: true});
 
     await Browser.actionLoading(false);
 

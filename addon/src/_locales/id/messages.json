@@ -511,16 +511,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Tab ini tidak dapat disembunyikan karena disematkan, menggunakan mikrofon, kamera, atau layar bersama: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ tab telah dipindahkan.\nKlik di sini untuk membuka tab pertama",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

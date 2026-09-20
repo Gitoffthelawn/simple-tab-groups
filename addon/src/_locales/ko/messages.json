@@ -503,16 +503,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "\"$titles$\" 탭은 마이크, 카메라 또는 공유 화면을 사용하여 고정되어 있으므로 숨길 수 없습니다.",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ 탭이 이동되었습니다.\n첫 번째 탭을 열려면 여기를 클릭하십시오.",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

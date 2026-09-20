@@ -565,16 +565,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ tabs have been moved.\nClick here to open the first tab",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "這”$titles$“分頁無法隱藏，可能因為是固定分頁，或正在使用麥克風或攝影機，或是正在分享螢幕",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ 個分頁已被移動。點選此處開啟第一個分頁",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

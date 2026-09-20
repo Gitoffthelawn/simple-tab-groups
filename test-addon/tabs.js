@@ -552,7 +552,11 @@ export class TabsTest extends Test {
 
                 const shown = keys.map(key => {
                     const value = changeInfo[key];
-                    return key === 'groupId' ? `groupId: ${this.square(value) || value}` : `${key}: ${value}`;
+                    if (key === 'groupId') {
+                        return `groupId: ${this.square(value) || value}`;
+                    }
+
+                    return `${key}: ${Object(value) === value ? JSON.stringify(value) : value}`;
                 });
 
                 return `${this.known(tabId)}  {${shown.join(', ')}}`;

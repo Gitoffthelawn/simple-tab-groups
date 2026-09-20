@@ -8,13 +8,47 @@ export const note = `Round 10 — API pinning, the facts behind pin-and-detach o
 (C) MANUAL: tabs.hide silently skips a tab with a LIVE microphone, tabs.update({pinned: true}) pins it
 normally with the microphone staying live (§19) — the microphone is requested by an injected script
 on NETWORK_URL (extension pages get the microphone without it ever reaching tab.sharingState), so
-the run needs only the permission grant.`;
+the run needs only the permission grant;
+(D) MANUAL: tabs.move of a tab with a LIVE microphone into another window and back — the capture
+survives the trip (sharingState, the track of the page's own stream, the indicator by eye) —
+recorded as MOVE-TABS-BEHAVIOR.md §6.`;
 
 const WATCH = [
     'tabs.onMoved', 'tabs.onUpdated', 'tabs.onActivated',
     'tabGroups.onCreated', 'tabGroups.onUpdated', 'tabGroups.onRemoved',
 ];
 const UPDATED_KEYS = ['pinned', 'groupId', 'hidden'];
+const UPDATED_KEYS_SHARING = [...UPDATED_KEYS, 'sharingState'];
+
+async function createMicTab(t, name) {
+    await t.create(name, {url: sceneUrl(name, NETWORK_URL), active: true});
+    await wait(LOAD_WAIT);
+
+    const grant = browser.tabs.executeScript(t.id(name), {
+        code: 'navigator.mediaDevices.getUserMedia({audio: true}).then(stream => { window.__micStream = stream; return "ok"; }, error => String(error));',
+    });
+
+    t.act(`USER: allow the microphone prompt in tab ${name}`);
+    await t.ask(`Tab ${name} is asking for the MICROPHONE — ALLOW it. The tab must get the microphone indicator. Then T.visualAnswer("done")`);
+
+    const [granted] = await grant;
+    t.note(`injected getUserMedia: ${granted}`);
+
+    const live = await browser.tabs.get(t.id(name));
+    t.note(`${name} sharingState: ${JSON.stringify(live.sharingState)}`);
+    t.require('microphone is live', live.sharingState?.microphone === true, `sharingState: ${JSON.stringify(live.sharingState)}`);
+}
+
+async function micReport(t, name) {
+    const tab = await browser.tabs.get(t.id(name));
+    const [tracks] = await browser.tabs.executeScript(tab.id, {
+        code: 'window.__micStream ? window.__micStream.getTracks().map(track => track.readyState).join(",") : "no stream";',
+    }).catch(error => [String(error)]);
+
+    t.note(`${name}: sharingState:${JSON.stringify(tab.sharingState)} stream tracks:${tracks}`);
+
+    return [tab.sharingState?.microphone, tracks];
+}
 
 export const tests = [
 
@@ -81,22 +115,7 @@ export const tests = [
     async run(t) {
         await t.scene(['keep1']);
 
-        await t.create('mic1', {url: sceneUrl('mic1', NETWORK_URL), active: true});
-        await wait(LOAD_WAIT);
-
-        const grant = browser.tabs.executeScript(t.id('mic1'), {
-            code: 'navigator.mediaDevices.getUserMedia({audio: true}).then(stream => { window.__micStream = stream; return "ok"; }, error => String(error));',
-        });
-
-        t.act('USER: allow the microphone prompt in tab mic1');
-        await t.ask('Tab mic1 is asking for the MICROPHONE — ALLOW it. The tab must get the microphone indicator. Then T.visualAnswer("done")');
-
-        const [granted] = await grant;
-        t.note(`injected getUserMedia: ${granted}`);
-
-        const live = await browser.tabs.get(t.id('mic1'));
-        t.note(`mic1 sharingState: ${JSON.stringify(live.sharingState)}`);
-        t.require('microphone is live', live.sharingState?.microphone === true, `sharingState: ${JSON.stringify(live.sharingState)}`);
+        await createMicTab(t, 'mic1');
 
         await t.activate('keep1');
 
@@ -178,6 +197,53 @@ export const tests = [
 
         t.expectRow('after 2', ['p1*(p)', 'p2(p)', '➕n1', '➕n0', 'a', 'b']);
         t.expect('both clamp to the first unpinned slot, staying unpinned', [fresh0.index, fresh0.pinned, fresh1.index, fresh1.pinned], [2, false, 2, false]);
+    },
+},
+
+{
+    id: 'R10.05',
+    title: 'MANUAL: tabs.move of a tab with a LIVE microphone into another window and back — does the capture survive',
+    async run(t) {
+        await t.scene(['keep1']);
+        await createMicTab(t, 'mic1');
+        await t.activate('keep1');
+
+        const win2 = await t.buildWindow(['w']);
+
+        t.watch([...WATCH, 'tabs.onDetached', 'tabs.onAttached'], {updatedKeys: UPDATED_KEYS_SHARING});
+        await t.snap('before (window 1)');
+        await t.snapWindow('before (window 2)', win2);
+        t.note('events are filtered to window 1: a sharingState update delivered while mic1 sits in window 2 is not shown, micReport reads it instead');
+
+        const outcome = await t.step('tabs.move(mic1, {windowId: 2, index: -1})  — microphone is live, mic1 is not active', async () => {
+            try {
+                return {ok: true, moved: [await browser.tabs.move(t.id('mic1'), {windowId: win2, index: -1})].flat()};
+            } catch (error) {
+                return {ok: false, error: String(error)};
+            }
+        }, {snap: 'moved out (window 1)'});
+
+        await t.snapWindow('moved out (window 2)', win2);
+        t.note(outcome.ok ? `tabs.move resolved with ${outcome.moved.length} tab(s), same id: ${outcome.moved[0]?.id === t.id('mic1')}` : `tabs.move REJECTED: ${outcome.error}`);
+
+        const movedOut = await micReport(t, 'mic1');
+
+        await t.ask('Look at window 2: is mic1 there and is the MICROPHONE indicator still shown on it (and the global sharing indicator of the browser)? Answer what you see');
+
+        await t.step('tabs.move(mic1, {windowId: 1, index: -1})  — back', () => browser.tabs.move(t.id('mic1'), {windowId: t.win, index: -1}), {snap: 'moved back (window 1)'});
+        await t.snapWindow('moved back (window 2)', win2);
+
+        const movedBack = await micReport(t, 'mic1');
+
+        t.expectRow('before (window 1)', ['keep1*', '➕mic1']);
+        t.expectRow('before (window 2)', ['w*']);
+        t.expectRow('moved out (window 1)', ['keep1*']);
+        t.expectRow('moved out (window 2)', ['w*', '➕mic1']);
+        t.expectRow('moved back (window 1)', ['keep1*', '➕mic1']);
+        t.expectRow('moved back (window 2)', ['w*']);
+        t.expect('the capture survived both moves', [outcome.ok, movedOut, movedBack], [true, [true, 'live'], [true, 'live']]);
+
+        await t.ask('Look at window 1: is the MICROPHONE indicator still shown on mic1? Answer what you see');
     },
 },
 

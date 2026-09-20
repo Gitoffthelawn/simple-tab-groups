@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Diese Tabs können nicht versteckt werden, da sie angeheftet sind, auf das Mikrofon oder die Kamera zugreifen oder den Bildschirm teilen: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ Tabs wurden entfernt.\nKlicke hier, um den ersten Tab zu öffnen.",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

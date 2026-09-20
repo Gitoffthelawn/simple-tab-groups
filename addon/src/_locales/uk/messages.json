@@ -553,16 +553,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Ці вкладки не можуть бути приховані, тому що вони закріплені, використовують мікрофон, камеру або екран спільного доступу: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "Переміщено $tabscount$ вкладок.\nНажміте тут для відкриття першої вкладки",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

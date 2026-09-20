@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Estas pestañas no pueden ocultarse porque están fijadas, usando el micrófono, cámara o compartiendo pantalla: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ pestañas fueron movidas.\nHacé clic acá para abrir la primera pestaña",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

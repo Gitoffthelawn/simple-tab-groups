@@ -499,16 +499,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Αυτά τα tabs δεν μπορούν να κρυφτούν είτε γιατί είναι pinned, είτε γιατί χρησιμοποιούν μικρόφωνο, camera ή κοινόχρηστη οθόνη: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ tabs μετακινήθηκαν.\nΚλικ εδώ για να ανοίξετε το πρώτο tab",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

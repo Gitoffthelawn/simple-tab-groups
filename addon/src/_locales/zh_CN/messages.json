@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "这些标签页无法隐藏，因为它们已被固定，或者正在使用麦克风或摄像头，或者正在共享屏幕：”$titles$“",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$个标签页已被移动。点击此处打开第一个标签页",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

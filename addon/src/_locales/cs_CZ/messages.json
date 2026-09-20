@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Tyto panely nemůžou být skryty z důvodu připnutí, používání mikrofonu, kamery nebo sdílení obrazovky: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ panelů bylo přesunuto.\nKlikněte zde pro otevření prvního.",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

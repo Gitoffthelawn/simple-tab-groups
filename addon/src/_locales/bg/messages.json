@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Следните раздели не могат да бъдат скрити защото са закачени, използват микрофона, камерата или споделят екрана: „$titles$“",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ раздела са преместени.\nНатиснете тук, за да посетите първия",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

@@ -231,6 +231,28 @@ previous one, wherever that one is by then.
       1ms  tabs.onMoved          r  4 → 3
   ```
 
+## 6. A tab with a LIVE microphone survives a cross-window move
+
+- **`tabs.move` into another window keeps the capture.** The tab keeps its id, `sharingState`
+  still reports `microphone: true`, the track of the page's own stream stays `live`, and the
+  microphone indicator on the tab keeps blinking (👁️) — after the move out and after the move
+  back alike. A `tabs.onUpdated {sharingState}` arrives right after the attach of the move back
+  (the harness shows only window 1, the value itself was not printed). The microphone is requested by an
+  injected script on a real page, the mover is not the active tab of its window. (R10.05)
+
+  | tab index | 0 | 1 |
+  | - | - | - |
+  | before (window 1) | keep1* | ➕mic1 |
+  | before (window 2) | w* |  |
+  | `tabs.move(mic1, {windowId: 2, index: -1})  — microphone is live, mic1 is not active` — settled 258 ms | | |
+  | moved out (window 1) | keep1* |  |
+  | moved out (window 2) | w* | ➕mic1 |
+  | `tabs.move(mic1, {windowId: 1, index: -1})  — back` — settled 265 ms | | |
+  | moved back (window 1) | keep1* | ➕mic1 |
+  | moved back (window 2) | w* |  |
+
+  The camera and screen sharing are not measured.
+
 ## Implications for STG code
 
 1. **A cross-window `tabs.move` reveals hidden tabs** (§1) — never assume a tab is still hidden
@@ -253,3 +275,6 @@ previous one, wherever that one is by then.
    stood before the first mover, and the first mover already in place fires no `tabs.onMoved`.
    `Tabs.ensureSorted` needs only contiguity and order, so that target is right for it; code that
    needs an exact landing index must read it from the resolved objects, not from the request.
+5. **A tab with a live microphone can be moved between windows** (§6): `Tabs.move` into a LOADED
+   group carries it like any other tab, the capture is not lost on the way. Into an unloaded
+   group it is pinned away instead, because it cannot be hidden (TABGROUPS-BEHAVIOR.md §19).

@@ -731,7 +731,7 @@ goes through `Tabs.moveNative`: the browser erases the mover's link (§7), STG w
 and the browser judges — an opener now in the same window is accepted, one left behind is
 refused, so a link travels only when parent and child move in one call, and the children an
 opener leaves behind lose theirs for good (§9). A same-window move keeps everything (§7), a
-pin keeps everything (§17) — the tab STG pins away before an unload (`beforeUnload`, a tab
+pin keeps everything (§17) — the tab STG pins away instead of hiding (`Groups.pinSharingTabs`, a tab
 that cannot be hidden) and a tab pinned by anyone else keep their links just the same. A link
 that ends up between two groups lives on in the window exactly as the browser keeps it; only
 the saved form cannot hold it.

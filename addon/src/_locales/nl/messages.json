@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Deze tabs kunnen niet verborgen worden omdat ze vastgemaakt zijn, de microfoon of camera gebruiken of het scherm delen: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ tabs werden verplaatst.\nKlik hier om de eerste tab te openen",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

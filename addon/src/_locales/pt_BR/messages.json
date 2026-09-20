@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Estas abas não podem ser escondidas porque elas estão fixadas, usando um microfone, câmera ou tela compartilhada: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ abas foram movidas.\nClique aqui para mover a primeira aba",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

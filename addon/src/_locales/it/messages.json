@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "Queste schede non possono essere nascoste. Sono fissate, usano il microfono, usano la fotocamera oppure usano lo schermo condiviso. Lista delle schede:\n\"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ schede sono state spostate. Clicca qui per aprire la prima scheda.",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",

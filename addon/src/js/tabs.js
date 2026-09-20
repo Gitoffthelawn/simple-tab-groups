@@ -555,6 +555,7 @@ function onStorageChanged(changes) {
 export async function create({url, active, pinned, title, index, windowId, openerTabId, cookieStoreId, newTabContainer, ifDifferentContainerReOpen, excludeContainersForReOpen, groupId, groupNativeId, favIconUrl, thumbnail}, params = {}) {
     const schema = tabsActionSchema.get('create');
     const skipTrackingCreated = params.skipTrackingCreated ?? schema.skipTrackingCreated ?? false;
+    const allowDiscarded = params.allowDiscarded ?? true;
 
     if (!Constants.IS_BACKGROUND_PAGE) {
         throw new Error('is not background');
@@ -598,7 +599,7 @@ export async function create({url, active, pinned, title, index, windowId, opene
         tab.pinned = true;
     }
 
-    if (!tab.active && !tab.pinned && tab.url && !tab.url.startsWith('about:') && !realUrl) {
+    if (allowDiscarded && !tab.active && !tab.pinned && tab.url && !tab.url.startsWith('about:') && !realUrl) {
         tab.discarded = true;
     }
 
@@ -927,7 +928,7 @@ export async function recreate(tabs, buildTabFunc) {
                 index,
                 windowId: tab.windowId,
                 openerTabId: undefined,
-            });
+            }, {allowDiscarded: !isSharing(tab)});
 
             copyByOldId.set(tab.id, copy);
             insertedByWindow.set(tab.windowId, inserted + 1);
@@ -1275,11 +1276,13 @@ async function moveNow(tabIds, groupId, params = {}) {
     const showOnlyActiveTab = params.showOnlyActiveTab ?? (auto && group.afterAutoMoveShowOnlyActiveTab);
     const showNotification = params.showNotification ?? (auto && group.afterAutoMoveShowNotification);
 
-    let tabs = await list(tabIds, {
+    const listParams = {
         sortByIndex: true,
         includeFavIconUrl: true,
         includeThumbnail: true,
-    });
+    };
+
+    let tabs = await list(tabIds, listParams);
 
     if (tabs.length) {
         tabIds = tabs.map(extractId);
@@ -1290,7 +1293,6 @@ async function moveNow(tabIds, groupId, params = {}) {
 
     const skippedTabs = skipTrackingTabs(tabIds);
 
-    const tabsCantHide = new Set;
     const windowId = groupWindowId || (group.tabs[0]?.windowId) || await Windows.getLastFocusedNormalWindow();
 
     log.log('vars', {groupWindowId, windowId});
@@ -1302,13 +1304,6 @@ async function moveNow(tabIds, groupId, params = {}) {
             showPinnedMessage = true;
             continueTrackingTabs([tab], skippedTabs);
             log.log('tab pinned', tab);
-            return false;
-        }
-
-        if (isCanNotBeHidden(tab)) {
-            tabsCantHide.add(getTitle(tab, false, 20));
-            continueTrackingTabs([tab], skippedTabs);
-            log.log('cant move tab', tab);
             return false;
         }
 
@@ -1325,6 +1320,15 @@ async function moveNow(tabIds, groupId, params = {}) {
     let membershipSnapshot = null;
 
     try {
+        if (!groupWindowId) {
+            const tabsToHide = await Groups.pinSharingTabs(tabs);
+
+            if (tabsToHide.length < tabs.length) {
+                continueTrackingTabs(tabs.filter(tab => !tabsToHide.includes(tab)), skippedTabs);
+                tabs = await list(tabsToHide, listParams);
+            }
+        }
+
         if (tabs.length) {
             destGroupNativeId = resolveDestSubGroupId(group, groupWindowId, tabs, newTabIndex);
 
@@ -1376,11 +1380,6 @@ async function moveNow(tabIds, groupId, params = {}) {
     if (showPinnedMessage) {
         log.log('notify pinnedTabsAreNotSupported');
         Notification('pinnedTabsAreNotSupported');
-    }
-
-    if (tabsCantHide.size) {
-        log.log('notify thisTabsCanNotBeHidden');
-        Notification(['thisTabsCanNotBeHidden', Array.from(tabsCantHide).join(', ')]);
     }
 
     if (!tabs.length) {
@@ -2018,12 +2017,8 @@ export function isPinned(tab) {
     return tab.pinned === true;
 }
 
-export function isCanBeHidden(tab) {
-    return !isPinned(tab) && !tab.sharingState?.screen && !tab.sharingState?.camera && !tab.sharingState?.microphone;
-}
-
-export function isCanNotBeHidden(tab) {
-    return !isCanBeHidden(tab);
+export function isSharing(tab) {
+    return Boolean(tab.sharingState?.screen || tab.sharingState?.camera || tab.sharingState?.microphone);
 }
 
 function isMutedBySelf(tab) {

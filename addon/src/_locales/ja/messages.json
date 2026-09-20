@@ -527,16 +527,6 @@
             }
         }
     },
-    "thisTabsCanNotBeHidden": {
-        "message": "これらのタブを隠すことはできません。タブがピン留めされているか、マイクやカメラを使用しているか、画面共有されています: \"$titles$\"",
-        "description": "These tabs can not be hidden because they are pinned, using a microphone, camera or shared screen: \"$titles$\"",
-        "placeholders": {
-            "titles": {
-                "content": "$1",
-                "example": "some titles"
-            }
-        }
-    },
     "moveMultipleTabsToGroupMessage": {
         "message": "$tabscount$ 個のタブを移動しました。\nここをクリックして最初のタブを開いてください",
         "description": "$tabscount$ tabs have been moved.\nClick here to open the first tab",
