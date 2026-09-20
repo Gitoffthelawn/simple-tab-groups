@@ -305,23 +305,25 @@ export function sendUpdatedAll() {
     send('updated.all');
 }
 
-Containers.onChanged(async () => {
-    if (!mainStorage.inited) {
-        return;
-    }
-
-    const log = logger.start('Containers.onChanged listener');
-
-    await enqueue(async () => {
-        const {groups} = await load();
-
-        if (normalizeContainersInGroups(groups)) {
-            await saveNow(groups);
+if (Constants.IS_BACKGROUND_PAGE) {
+    Containers.onChanged(async () => {
+        if (!mainStorage.inited) {
+            return;
         }
-    });
 
-    log.stop();
-});
+        const log = logger.start('Containers.onChanged listener');
+
+        await enqueue(async () => {
+            const {groups} = await load();
+
+            if (normalizeContainersInGroups(groups)) {
+                await saveNow(groups);
+            }
+        });
+
+        log.stop();
+    });
+}
 
 export async function load(groupId = null, withTabs = false, params) {
     const log = logger.start('load', groupId, {withTabs, params});

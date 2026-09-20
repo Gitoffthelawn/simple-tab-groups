@@ -1568,6 +1568,7 @@ async function clearAddon(reloadAddonOnFinish = true) {
     }
 }
 
+let cloudSyncResetTimer;
 async function cloudSync({
         trigger = Cloud.TRIGGER_MANUAL,
         trust = null,
@@ -1612,9 +1613,9 @@ async function cloudSync({
     actionListeners.add(Cloud.on('sync-end', () => browserActionProgress(100, syncSuccessColor, true)));
     actionListeners.add(Cloud.on('sync-error', ({progress}) => browserActionProgress(progress, syncDangerColor, true)));
     actionListeners.add(Cloud.on('sync-finish', ({ok}) => {
-        cloudSync.resetTimer = setTimeout(() => Browser.actionLoading(false), ok ? 0 : 5_000);
+        cloudSyncResetTimer = setTimeout(() => Browser.actionLoading(false), ok ? 0 : 5_000);
     }));
-    clearTimeout(cloudSync.resetTimer);
+    clearTimeout(cloudSyncResetTimer);
 
     const syncResult = await Cloud.synchronization(trust, revision);
 

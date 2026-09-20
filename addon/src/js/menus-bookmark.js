@@ -344,7 +344,7 @@ async function createNewGroupNow(info) {
 
             for (const bookm of folder.children) {
                 if (bookm.type === Bookmarks.FOLDER) {
-                    await addBookmarkFolderAsGroup(bookmark);
+                    await addBookmarkFolderAsGroup(bookm);
                 } else if (bookm.type === Bookmarks.BOOKMARK) {
                     tabsToCreate.push({
                         title: bookm.title,

@@ -184,7 +184,7 @@ export async function createTemporary() {
     return contextualIdentity;
 }
 
-async function create(details) {
+export async function create(details) {
     const contextualIdentity = await browser.contextualIdentities.create(details);
     containers[contextualIdentity.cookieStoreId] = contextualIdentity;
     return contextualIdentity;
