@@ -1,6 +1,5 @@
 import {ACTION_WAIT, LOAD_WAIT, TIGHT_POLL_WAIT} from '../constants.js';
 import {wait} from '../test.js';
-import {openedWindows} from '../tabs.js';
 
 export const note = `Round 12 — delivery timing of tabs.onAttached / tabs.onDetached against the
 resolve of the browser.tabs.move() promise: can an event land AFTER the resolve, and how late.
@@ -309,8 +308,6 @@ async function pingPong(t, {movers, iterations, paced, hideEachTrip = false, dis
         }
     } finally {
         timing.stop();
-        openedWindows.delete(winB);
-        await browser.windows.remove(winB).catch(() => {});
     }
 }
 

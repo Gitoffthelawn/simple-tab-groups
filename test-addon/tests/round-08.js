@@ -297,31 +297,26 @@ export const tests = [
         const win2 = await browser.windows.create({url: sceneUrl('target')});
         openedWindows.add(win2.id);
 
-        try {
-            await wait(ACTION_WAIT);
+        await wait(ACTION_WAIT);
 
-            t.watch(WATCH_ALL, {updatedKeys: ['groupId', 'hidden']});
-            await t.snap('before');
+        t.watch(WATCH_ALL, {updatedKeys: ['groupId', 'hidden']});
+        await t.snap('before');
 
-            t.act('USER: drag gr2 from the scene window into the second window');
-            await t.ask('A second window is open (tab "target"). Drag tab gr2 from the FIRST window into the SECOND window\'s tab strip with the mouse. Then T.visualAnswer("done")');
-            await t.settled();
-            await wait(ACTION_WAIT);
-            await t.snap('after (scene window)');
+        t.act('USER: drag gr2 from the scene window into the second window');
+        await t.ask('A second window is open (tab "target"). Drag tab gr2 from the FIRST window into the SECOND window\'s tab strip with the mouse. Then T.visualAnswer("done")');
+        await t.settled();
+        await wait(ACTION_WAIT);
+        await t.snap('after (scene window)');
 
-            await t.describeWindow('the second window', win2.id);
+        await t.describeWindow('the second window', win2.id);
 
-            const fresh = await browser.tabs.get(t.id('gr2'));
-            t.note(`gr2 after the drag: group:${t.square(fresh.groupId) || fresh.groupId} inSecondWindow:${fresh.windowId === win2.id}`);
-            t.note(`groups in the scene window: ${(await t.groupsInfo()).join(' | ') || '(none)'}`);
+        const fresh = await browser.tabs.get(t.id('gr2'));
+        t.note(`gr2 after the drag: group:${t.square(fresh.groupId) || fresh.groupId} inSecondWindow:${fresh.windowId === win2.id}`);
+        t.note(`groups in the scene window: ${(await t.groupsInfo()).join(' | ') || '(none)'}`);
 
-            t.expectRow('after (scene window)', ['keep1', '🟥 gr1', 'keep2*']);
-            t.expect('arrived UNGROUPED in the other window', [fresh.groupId, fresh.windowId === win2.id], [TAB_GROUP_ID_NONE, true]);
-            t.expect('the source group survived', (await t.groupsInfo()).length, 1);
-        } finally {
-            await browser.windows.remove(win2.id).catch(() => {});
-            openedWindows.delete(win2.id);
-        }
+        t.expectRow('after (scene window)', ['keep1', '🟥 gr1', 'keep2*']);
+        t.expect('arrived UNGROUPED in the other window', [fresh.groupId, fresh.windowId === win2.id], [TAB_GROUP_ID_NONE, true]);
+        t.expect('the source group survived', (await t.groupsInfo()).length, 1);
     },
 },
 

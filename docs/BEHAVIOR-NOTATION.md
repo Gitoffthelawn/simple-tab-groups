@@ -153,10 +153,12 @@ the microphone on and lets a `webRequest` listener see every main-frame load, an
 of the run.
 
 **Isolation.** One test = one window it opens itself = one table. Tests never share a window and
-never depend on the order they ran in. Cleanliness is the harness's job, not the test's: before
-every test it removes every listener, closes every window it opened, and restores every browser
-setting a previous test changed — and writes into the report whatever it had to clean up. Each
-round is imported fresh, so nothing a round file holds at module level survives into the next run.
+never depend on the order they ran in. Cleanliness is the harness's job, not the test's: when a
+test ends it removes every listener, restores every browser setting the test changed and closes
+every window it opened, the scene window and the extra ones (`t.buildWindow`) alike; before every
+test it sweeps once more for what a crashed or restarted run left behind — and writes into the
+report whatever it had to clean up. Each round is imported fresh, so nothing a round file holds
+at module level survives into the next run.
 
 **The scene is asserted.** After building it, the test compares the actual tab order against the
 requested one and aborts on any mismatch. A scene that silently came out wrong must never reach a

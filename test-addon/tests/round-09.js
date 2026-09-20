@@ -311,23 +311,18 @@ export const tests = [
 
         openedWindows.add(win.id);
 
-        try {
-            await wait(ACTION_WAIT);
-            await t.snap('after (scene window)');
-            await t.describeWindow(`the new window (${t.winName(win.id)})`, win.id);
+        await wait(ACTION_WAIT);
+        await t.snap('after (scene window)');
+        await t.describeWindow(`the new window (${t.winName(win.id)})`, win.id);
 
-            const fresh = await browser.tabs.get(t.id('gr2'));
-            t.note(`gr2 after the call: window:${t.winName(fresh.windowId)} group:${t.square(fresh.groupId) || fresh.groupId}`);
-            t.note(`groups left in the scene window: ${(await t.groupsInfo()).join(' | ') || '(none)'}`);
-            t.note('key events (§17): same shape as the mouse drag — attach delivered BEFORE windows.onCreated, no onCreated, no initial tab');
+        const fresh = await browser.tabs.get(t.id('gr2'));
+        t.note(`gr2 after the call: window:${t.winName(fresh.windowId)} group:${t.square(fresh.groupId) || fresh.groupId}`);
+        t.note(`groups left in the scene window: ${(await t.groupsInfo()).join(' | ') || '(none)'}`);
+        t.note('key events (§17): same shape as the mouse drag — attach delivered BEFORE windows.onCreated, no onCreated, no initial tab');
 
-            t.expect('the tab left the scene window', fresh.windowId, win.id);
-            t.expect('arrived UNGROUPED', fresh.groupId, TAB_GROUP_ID_NONE);
-            t.expect('the source group survived', (await t.groupsInfo()).length, 1);
-        } finally {
-            await browser.windows.remove(win.id).catch(() => {});
-            openedWindows.delete(win.id);
-        }
+        t.expect('the tab left the scene window', fresh.windowId, win.id);
+        t.expect('arrived UNGROUPED', fresh.groupId, TAB_GROUP_ID_NONE);
+        t.expect('the source group survived', (await t.groupsInfo()).length, 1);
     },
 },
 

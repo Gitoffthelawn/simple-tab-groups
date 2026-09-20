@@ -1,5 +1,4 @@
 import {TAB_GROUP_ID_NONE, NEW_TAB_POSITIONS} from '../constants.js';
-import {openedWindows} from '../tabs.js';
 
 export const note = 'Round 01 — TABGROUPS-BEHAVIOR.md §1, §2, §20 and §21, plus a harness/API self-check.';
 
@@ -305,28 +304,23 @@ function crossMoveTest(id, title, {dest, members, movers, index, after}) {
 
             const sourceWindowId = await t.buildWindow(['src1', ...movers]);
 
-            try {
-                t.watch(['tabs.onMoved', 'tabs.onUpdated', 'tabs.onAttached', 'tabs.onDetached', 'tabGroups.onCreated', 'tabGroups.onRemoved']);
-                await sourceRow(t, 'before (source window)', sourceWindowId);
-                await t.snap('before (target window)');
+            t.watch(['tabs.onMoved', 'tabs.onUpdated', 'tabs.onAttached', 'tabs.onDetached', 'tabGroups.onCreated', 'tabGroups.onRemoved']);
+            await sourceRow(t, 'before (source window)', sourceWindowId);
+            await t.snap('before (target window)');
 
-                const resolved = await t.step(`tabs.move([${movers.join(', ')}], {windowId: target, index: ${index}})`, () => {
-                    return browser.tabs.move(t.ids(movers), {windowId: t.win, index}).catch(e => {
-                        t.note(`tabs.move threw: ${e.message}`);
-                        return null;
-                    });
-                }, {snap: 'after (target window)'});
+            const resolved = await t.step(`tabs.move([${movers.join(', ')}], {windowId: target, index: ${index}})`, () => {
+                return browser.tabs.move(t.ids(movers), {windowId: t.win, index}).catch(e => {
+                    t.note(`tabs.move threw: ${e.message}`);
+                    return null;
+                });
+            }, {snap: 'after (target window)'});
 
-                await sourceRow(t, 'after (source window)', sourceWindowId);
+            await sourceRow(t, 'after (source window)', sourceWindowId);
 
-                await noteMovers(t, movers, resolved);
+            await noteMovers(t, movers, resolved);
 
-                t.expectRow('after (target window)', after);
-                t.expectRow('after (source window)', ['src1*']);
-            } finally {
-                openedWindows.delete(sourceWindowId);
-                await browser.windows.remove(sourceWindowId).catch(() => {});
-            }
+            t.expectRow('after (target window)', after);
+            t.expectRow('after (source window)', ['src1*']);
         },
     };
 }

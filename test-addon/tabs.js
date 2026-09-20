@@ -102,10 +102,6 @@ export class TabsTest extends Test {
         this.tracked.add(windowId);
     }
 
-    untrackWindow(windowId) {
-        this.tracked.delete(windowId);
-    }
-
     bind(tabId, name) {
         this.idByName.set(name, tabId);
         this.nameById.set(tabId, name);
@@ -552,6 +548,7 @@ export class TabsTest extends Test {
 
                 const shown = keys.map(key => {
                     const value = changeInfo[key];
+
                     if (key === 'groupId') {
                         return `groupId: ${this.square(value) || value}`;
                     }
@@ -601,11 +598,7 @@ export class TabsTest extends Test {
     }
 
     async close() {
-        if (this.win !== null) {
-            openedWindows.delete(this.win);
-            await ungroupWindow(this.win);
-            await browser.windows.remove(this.win).catch(() => {});
-            this.win = null;
-        }
+        await closeHarnessWindows();
+        this.win = null;
     }
 }

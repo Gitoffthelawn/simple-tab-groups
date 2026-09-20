@@ -394,8 +394,7 @@ whoever wants links across an undo-close must save and re-apply them itself.
    94ms  tabs.onUpdated        h1  {hidden: true}  [restored]
 ```
 
-The trailing lines of the test's own cleanup close are omitted; 13 noisy `tabs.onUpdated`
-dropped.
+13 noisy `tabs.onUpdated` dropped.
 
 ### 16. `sessions.restore()` of a closed TAB does not re-link it either — even though its opener is still alive with the SAME id (R18.02)
 

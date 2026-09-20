@@ -46,8 +46,10 @@ A run is not unattended:
 measured so far are checkpointed after every test. `T.stop()` ends a run after the current test and
 still produces the report. `T.forget()` throws a stuck checkpoint away.
 
-Nothing has to be cleaned up by hand between runs: before every test the harness removes its
-listeners, closes the windows it opened and restores any browser setting a test changed, and it
+Nothing has to be cleaned up by hand between runs: when a test ends the harness removes its
+listeners, restores every browser setting the test changed and closes every window of the stand,
+the scene window and the ones `t.buildWindow` opened alike. Before every test it sweeps once more
+— windows and settings left behind by a run that crashed or is coming back from a restart — and
 writes into the report whatever it had to clean up.
 
 ## Rounds
@@ -153,10 +155,14 @@ either way the name still travels in `?tab=` and everything else works unchanged
 - **A test that needs a browser restart** splits into `run(t)`, which builds the scene and ends with
   `await t.restart()`, and `afterRestart(t)`, which measures. The window is found again by the names
   in the tab urls; the table continues in the same report.
+- **A window a test opens with a raw API call** is either put into `openedWindows`
+  (`openedWindows.add(win.id)`) — then the harness closes it when the test ends, like the ones it
+  opened itself — or closed by the test.
 - **Never put a foreign window into `openedWindows`.** That set marks windows as the harness's own,
-  and the pre-test cleanup CLOSES everything in it — including the user's main browser window, if a
-  test grabbed it while enumerating `windows.getAll()`. Add only windows the test itself created;
-  to inspect a window some gesture produced, locate it from a tab you know:
+  and the harness CLOSES everything in it, when the test ends and again before the next one —
+  including the user's main browser window, if a test grabbed it while enumerating
+  `windows.getAll()`. Add only windows the test itself created; to inspect a window some gesture
+  produced, locate it from a tab you know:
 
   ```js
   // wrong: brands every other window as ours - the cleanup closes them all, user's window included
@@ -212,6 +218,7 @@ The `t` passed to a test:
 | call | what it does |
 | - | - |
 | `t.scene(['a', 'b', 'c'])` | opens a window with these tabs in this order, waits until they are all loaded, **asserts the order** and aborts on mismatch |
+| `t.buildWindow(['w'])` | opens one more window with these tabs in this order, asserts the order and returns the window id; the harness closes it when the test ends |
 | `t.step('tabs.move(…)', fn)` | resets the event clock, writes the action row, runs `fn`, waits for the browser to go quiet, snapshots, returns what `fn` returned |
 | `t.step(…, {wait: 0})` / `{wait: LOAD_WAIT}` / `{snap: false}` | no pause at all for speed and race tests, a fixed pause, or no snapshot |
 | `t.snap('before')` / `t.act('…')` | a state row / an action row, for the cases `t.step` does not fit |

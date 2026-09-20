@@ -263,10 +263,6 @@ export const tests = [
 
         t.expect('the values are readable inside tabs.onCreated, the discarded and the hidden tab included (CREATE-TABS-BEHAVIOR.md §29)', t.probesByName(names), expected);
         t.expect('the values are on the fresh tabs after the restore settled (§29)', await t.valuesByName(names), expected);
-
-        t.untrackWindow(restoredWinId);
-        openedWindows.delete(restoredWinId);
-        await browser.windows.remove(restoredWinId).catch(() => {});
     },
 },
 
@@ -348,10 +344,6 @@ export const tests = [
         t.note(`restored window: ${restoredWinId === winId ? 'the SAME id' : 'a fresh id'}`);
         t.expect('the window value is readable inside every tabs.onCreated of the restored window and inside windows.onCreated (CREATE-TABS-BEHAVIOR.md §29)', {reads: t.windowProbes.length, values: [...new Set(t.windowProbes)]}, {reads: names.length + 1, values: [shown('value-window')]});
         t.expect('the window value is on the fresh window after the restore settled (§29)', await readWindowValue(restoredWinId), shown('value-window'));
-
-        t.untrackWindow(restoredWinId);
-        openedWindows.delete(restoredWinId);
-        await browser.windows.remove(restoredWinId).catch(() => {});
     },
 },
 

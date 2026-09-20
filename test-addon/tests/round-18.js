@@ -162,10 +162,6 @@ export const tests = [
         t.expectRow('after (scene window)', ['keep1*']);
         t.expect('every tab id is fresh (§15)', reused, 0);
         t.expect('openers after the restore: absent on every tab (§15)', Object.fromEntries(after.map(tab => [nameFromUrl(tab.url) ?? '?', t.describeOpener(tab)])), {p: 'absent', c1: 'absent', c2: 'absent', x: 'absent', h1: 'absent'});
-
-        t.untrackWindow(restoredWinId);
-        await browser.windows.remove(restoredWinId).catch(() => {});
-        openedWindows.delete(restoredWinId);
     },
 },
 

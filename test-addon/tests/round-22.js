@@ -166,10 +166,6 @@ class WindowBirthTest extends TabsTest {
         for (const tab of tabs) {
             this.note(`${this.known(tab.id)}${tab.active ? ' (active)' : ''}: ${this.describeTab(tab)}`);
         }
-
-        this.untrackWindow(this.born);
-        await browser.windows.remove(this.born).catch(() => {});
-        openedWindows.delete(this.born);
     }
 
     expectBirth({others = null, atRead}) {
