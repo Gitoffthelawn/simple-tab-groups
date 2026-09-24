@@ -6,6 +6,7 @@ import Listeners from './listeners.js\
 &storage.local.onChanged\
 ';
 import Logger from './logger.js';
+import Queue from './queue.js';
 import BatchProcessor from './batch-processor.js';
 import * as Cache from './cache.js';
 import * as Operations from './operations.js';
@@ -111,30 +112,16 @@ function adoptLiveGroup(liveId, memberTabs = []) {
     return stableId;
 }
 
-const windowQueues = new Map;
-
-function queueWindowOperation(windowId, operation) {
-    const turn = windowQueues.getOrInsertComputed(windowId, () => Promise.resolve())
-        .then(operation, operation);
-
-    windowQueues.set(windowId, turn);
-
-    turn.catch(() => {}).finally(() => {
-        if (windowQueues.get(windowId) === turn) {
-            windowQueues.delete(windowId);
-        }
-    });
-
-    return turn;
-}
-
 // window gate = per-window serialization + suppression of the mirror for the duration of our own
 // operations. Mirror triggers arriving while the gate is held mark the window dirty, and one
-// mirror pass runs automatically after the gate is released - no event is ever lost
+// mirror pass runs automatically after the gate is released - no event is ever lost.
+// Nothing under the gate waits for the groups queue: a gated operation returns the groupsNative
+// it has collected, and the write goes after the gate is released
+const windowQueue = new Queue('NativeGroups');
 const gatedWindows = new Map; // windowId → {dirty}
 
-function withWindowGate(windowId, operation) {
-    return queueWindowOperation(windowId, async () => {
+function withWindowGate(windowId, name, operation) {
+    return windowQueue.run(name, async () => {
         const gate = {dirty: false};
 
         gatedWindows.set(windowId, gate);
@@ -148,7 +135,7 @@ function withWindowGate(windowId, operation) {
                 scheduleMirrorWindow(windowId);
             }
         }
-    });
+    }, windowId);
 }
 
 // listeners
@@ -274,8 +261,12 @@ export function scheduleMirrorWindow(windowId) {
     }
 }
 
-function mirrorWindow(windowId) {
-    return withWindowGate(windowId, () => mirrorWindowNow(windowId));
+async function mirrorWindow(windowId) {
+    const changes = await withWindowGate(windowId, 'mirror', () => mirrorWindowNow(windowId));
+
+    if (changes) {
+        await Groups.update(changes.groupId, () => deferMirror(windowId) ? {} : {groupsNative: changes.groupsNative});
+    }
 }
 
 async function mirrorWindowNow(windowId) {
@@ -382,10 +373,12 @@ async function mirrorWindowNow(windowId) {
 
     if (isSameGroupsNative(group.groupsNative, groupsNative)) {
         log.stop('no metadata changes');
-    } else {
-        await Groups.update(groupId, {groupsNative});
-        log.stop('updated, count:', groupsNative.length);
+        return;
     }
+
+    log.stop('metadata changed, count:', groupsNative.length);
+
+    return {groupId, groupsNative};
 }
 
 // deferred erasing: the mirror only nominates, the session is removed by this second settled
@@ -422,7 +415,7 @@ function deferClearWindow(windowId, candidates) {
 }
 
 function clearWindowSessions(windowId, candidates) {
-    return withWindowGate(windowId, () => clearWindowSessionsNow(windowId, candidates));
+    return withWindowGate(windowId, 'clear-sessions', () => clearWindowSessionsNow(windowId, candidates));
 }
 
 async function clearWindowSessionsNow(windowId, pending) {
@@ -528,8 +521,12 @@ async function isLiveStateSame(windowId, {tabs: groupTabs, groupsNative = []}) {
 // (re)create the group's sub-groups in the window from per-tab membership. The ids are stable,
 // so the sessions stay untouched and only garbage collection can change groupsNative.
 // Sub-groups without members are dropped here (garbage collection).
-export function apply(windowId, group) {
-    return withWindowGate(windowId, () => applyNow(windowId, group));
+export async function apply(windowId, group) {
+    const groupsNative = await withWindowGate(windowId, 'apply', () => applyNow(windowId, group));
+
+    if (groupsNative) {
+        await Groups.update(group.id, {groupsNative});
+    }
 }
 
 async function applyNow(windowId, group) {
@@ -589,12 +586,16 @@ async function applyNow(windowId, group) {
         }
     }
 
-    if (!isSameGroupsNative(group.groupsNative, appliedGroupsNative)) {
-        group.groupsNative = appliedGroupsNative;
-        await Groups.update(group.id, {groupsNative: appliedGroupsNative});
+    if (isSameGroupsNative(group.groupsNative, appliedGroupsNative)) {
+        log.stop();
+        return;
     }
 
-    log.stop();
+    group.groupsNative = appliedGroupsNative;
+
+    log.stop('metadata changed, count:', appliedGroupsNative.length);
+
+    return appliedGroupsNative;
 }
 
 export async function hasLiveGroups(windowId) {
@@ -710,7 +711,7 @@ export async function restoreMembership(group, movedTabs, snapshot = null) {
     const log = logger.start(restoreMembership, 'group:', group.id, {windowId}, 'carried:', snapshot.size);
 
     if (windowId) {
-        await withWindowGate(windowId, async () => {
+        await withWindowGate(windowId, 'restore-membership', async () => {
             const [winTabs, liveGroups] = await Promise.all([
                 queryWindowTabs(windowId),
                 browser.tabGroups.query({windowId}),

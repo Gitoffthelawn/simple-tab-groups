@@ -5,6 +5,7 @@ import Listeners, {getExtensionStartTime} from './listeners.js\
 &storage.local.onChanged\
 ';
 import Logger from './logger.js';
+import Queue from './queue.js';
 // import backgroundSelf from './background.js';
 import BatchProcessor from './batch-processor.js';
 import * as Browser from './browser.js';
@@ -92,19 +93,16 @@ async function runGrandRestoreNow(restoredWindowIds) {
 
     const allWindowsMap = await load(true).then(windows => new Map(windows.map(win => [win.id, win])));
     const {groups} = await Groups.load();
-    let {tabsToRestore = []} = await Storage.get('tabsToRestore');
+    const tabsToRestore = await getTabsToRestore();
 
     log.log('all windows', Array.from(allWindowsMap.keys()));
 
-    let tabsToRestoreChanged = false;
     const openersToApply = [];
     function deleteTabsToRestoreByGroup(group) {
         const savedTabs = tabsToRestore.filter(tab => tab.groupId === group.id);
 
         if (savedTabs.length) {
             openersToApply.push({group, savedTabs});
-            tabsToRestore = rebuildTabsToRestore(tabsToRestore, tab => tab.groupId !== group.id);
-            tabsToRestoreChanged = true;
         }
     }
 
@@ -399,14 +397,11 @@ async function runGrandRestoreNow(restoredWindowIds) {
         shouldRestoreMissedTabs: false,
     };
 
-    if (tabsToRestoreChanged) {
-        if (tabsToRestore.length) {
-            // If multiple windows were closed but only one was restored, it needs to restore the remaining tabs in that window
-            result.shouldRestoreMissedTabs = true;
-            await Storage.set({tabsToRestore});
-        } else {
-            await Storage.remove('tabsToRestore');
-        }
+    if (openersToApply.length) {
+        const restTabsToRestore = await forgetTabsToRestore(openersToApply.flatMap(({savedTabs}) => savedTabs));
+
+        // If multiple windows were closed but only one was restored, it needs to restore the remaining tabs in that window
+        result.shouldRestoreMissedTabs = restTabsToRestore.length > 0;
     }
 
     log.stop();
@@ -538,21 +533,25 @@ async function onRemoved(windowId) {
 
     if (tabsToRestore.length) {
         log.info('start merge tabs');
-        const prevRestore = await getTabsToRestore();
-        const tabsToRestoreFiltered = tabsToRestore.filter(tab => {
-            const twin = prevRestore.find(t => !t.id && Tabs.isSame(t, tab));
 
-            if (twin) {
-                // the dropped duplicate may be somebody's opener: its id moves onto the kept twin,
-                // getOpenersById resolves the children there and the rebuild strips it again (removeIds)
-                twin.id = tab.id;
-                return false;
-            }
+        await tabsToRestoreQueue.run('add', async () => {
+            const prevRestore = await getTabsToRestore();
+            const tabsToRestoreFiltered = tabsToRestore.filter(tab => {
+                const twin = prevRestore.find(t => !t.id && Tabs.isSame(t, tab));
 
-            return true;
-        });
-        await Storage.set({
-            tabsToRestore: rebuildTabsToRestore([...prevRestore, ...tabsToRestoreFiltered]),
+                if (twin) {
+                    // the dropped duplicate may be somebody's opener: its id moves onto the kept twin,
+                    // getOpenersById resolves the children there and the rebuild strips it again (removeIds)
+                    twin.id = tab.id;
+                    return false;
+                }
+
+                return true;
+            });
+
+            await Storage.set({
+                tabsToRestore: rebuildTabsToRestore([...prevRestore, ...tabsToRestoreFiltered]),
+            });
         });
 
         removedBatch.add(windowId);
@@ -748,16 +747,26 @@ export function rebuildTabsToRestore(tabs, keep = () => true) {
     return tabs.filter(tab => rebuilt.has(tab)).map(tab => rebuilt.get(tab));
 }
 
+const tabsToRestoreQueue = new Queue('TabsToRestore');
+
 async function getTabsToRestore() {
-    const {tabsToRestore} = await Storage.get('tabsToRestore');
+    const {tabsToRestore = []} = await Storage.get('tabsToRestore');
     // not normalizeTabs: dropping a saved entry shifts its neighbors' offsets - the rebuild recomputes them
-    const normalizedTabsToRestore = rebuildTabsToRestore((tabsToRestore ?? []).map(Tabs.normalizeUrl), tab => tab.url);
+    return rebuildTabsToRestore(tabsToRestore.map(Tabs.normalizeUrl), tab => tab.url);
+}
 
-    if (!normalizedTabsToRestore.length && tabsToRestore) {
-        await Storage.remove('tabsToRestore');
-    }
+function forgetTabsToRestore(restoredTabs) {
+    return tabsToRestoreQueue.run('forget', async () => {
+        const tabsToRestore = rebuildTabsToRestore(await getTabsToRestore(), tab => !restoredTabs.some(t => Tabs.isSame(t, tab)));
 
-    return normalizedTabsToRestore;
+        if (tabsToRestore.length) {
+            await Storage.set({tabsToRestore});
+        } else {
+            await Storage.remove('tabsToRestore');
+        }
+
+        return tabsToRestore;
+    });
 }
 
 export function tryRestoreMissedTabs(...args) {
@@ -828,20 +837,8 @@ async function tryRestoreMissedTabsNow(actionLoading = true) {
         logCreate.stop();
     }
 
-    {
-        log.log('filtering and saving tabs that have already been restored');
-        let tabsInDB = await getTabsToRestore();
-
-        tabsInDB = rebuildTabsToRestore(tabsInDB, tab => !tabsToRestore.some(t => Tabs.isSame(t, tab)));
-
-        if (tabsInDB.length) {
-            await Storage.set({
-                tabsToRestore: tabsInDB,
-            });
-        } else {
-            await Storage.remove('tabsToRestore');
-        }
-    }
+    log.log('filtering and saving tabs that have already been restored');
+    await forgetTabsToRestore(tabsToRestore);
 
     if (actionLoading) {
         await Browser.actionLoading(false);

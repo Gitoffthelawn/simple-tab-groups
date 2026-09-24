@@ -1,6 +1,7 @@
 
 import * as Constants from './constants.js';
 import * as Utils from './utils.js';
+import Queue from './queue.js';
 
 export const GROUP_KEY = 'groupId';
 export const GROUP_NATIVE_KEY = 'groupNativeId';
@@ -8,24 +9,26 @@ export const FAVICON_KEY = 'favIconUrl';
 export const THUMBNAIL_KEY = 'thumbnail';
 export const KEYS = [GROUP_KEY, GROUP_NATIVE_KEY, FAVICON_KEY, THUMBNAIL_KEY];
 
-const PENDING = Symbol('pending');
-
 export const tabs = new Map;
 export const lastTabsState = new Map; // BUG https://bugzilla.mozilla.org/show_bug.cgi?id=1818392
 export const windows = new Map;
 
 const SESSIONS_API = new Map([
     [tabs, {
+        name: 'tab',
         load: browser.sessions.getTabValue,
         set: browser.sessions.setTabValue,
         remove: browser.sessions.removeTabValue,
     }],
     [windows, {
+        name: 'window',
         load: browser.sessions.getWindowValue,
         set: browser.sessions.setWindowValue,
         remove: browser.sessions.removeWindowValue,
     }],
 ]);
+
+const sessionQueue = new Queue('Cache', {trace: false});
 
 // the thumbnails option: tabs.js sets it from storage, restoreBackup from the backup being
 // restored. While off, thumbnails are neither read, written, removed nor handed out - the ones
@@ -147,14 +150,14 @@ export function getTabChildren(tabIds) {
 // session values, the same for tabs and windows: a record field has three states - no key means
 // not read yet, null means read and the session has no value, anything else is the value. Only
 // the load and the remove check the mark (a known "no value" is not read and not removed again);
-// the getters and the copies never let null out of the module. Operations on one record and one
+// the getters and the copies never let null out of the module. Operations on one id and one
 // key run one after another (queueByKey), different keys in parallel. A record deleted from the
 // store (forgetTab, removeTab, removeWindow) while an operation waits its turn is dead: the load
 // skips it, a write lands in it and nobody reads it again
 async function loadValue(store, id, key) {
     const record = store.getOrInsertComputed(id, createRecord);
 
-    await queueByKey(record, key, async () => {
+    await queueByKey('load', store, id, key, async () => {
         if (record !== store.get(id)) {
             return;
         }
@@ -170,7 +173,7 @@ async function loadValue(store, id, key) {
 async function setValue(store, id, key, value) {
     const record = store.getOrInsertComputed(id, createRecord);
 
-    await queueByKey(record, key, async () => {
+    await queueByKey('set', store, id, key, async () => {
         await SESSIONS_API.get(store).set(id, key, value);
         record[key] = value;
     });
@@ -179,7 +182,7 @@ async function setValue(store, id, key, value) {
 async function removeValue(store, id, key) {
     const record = store.get(id) ?? createRecord(id);
 
-    await queueByKey(record, key, async () => {
+    await queueByKey('remove', store, id, key, async () => {
         if (record[key] !== null) {
             await SESSIONS_API.get(store).remove(id, key);
             record[key] = null;
@@ -396,15 +399,6 @@ export async function removeWindowSession(id) {
     removeWindow(id);
 }
 
-async function queueByKey(record, key, fn) {
-    const pending = record[PENDING] ??= new Map;
-    const turn = (pending.get(key) ?? Promise.resolve()).catch(() => {}).then(fn);
-
-    pending.set(key, turn);
-
-    try {
-        return await turn;
-    } finally {
-        pending.get(key) === turn && pending.delete(key);
-    }
+function queueByKey(name, store, id, key, fn) {
+    return sessionQueue.run(name, fn, `${SESSIONS_API.get(store).name}:${id}:${key}`);
 }

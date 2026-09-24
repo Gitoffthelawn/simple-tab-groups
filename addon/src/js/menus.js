@@ -2,6 +2,7 @@
 import Listeners from './listeners.js?menus.onClicked';
 import {MENU_ITEM_BUTTON} from './constants-browser.js';
 import Logger from './logger.js';
+import Queue from './queue.js';
 import runModule from './module-runner.js';
 
 export const {ContextType, ItemType} = browser.menus;
@@ -55,12 +56,21 @@ async function saveAll(menus) {
     await browser.storage.session.set({[STORAGE_KEY]: menus});
 }
 
-let writeQueue = Promise.resolve();
+const writeQueue = new Queue('Menus');
+const transactionQueue = new Queue('MenusTransaction');
 
-function queueWrite(fn) {
-    const turn = writeQueue.then(fn);
-    writeQueue = turn.catch(() => {});
-    return turn;
+export function transaction(name, fn) {
+    const log = logger.start('transaction', name);
+
+    return transactionQueue.run(name, async () => {
+        log.log('started');
+
+        const result = await fn();
+
+        log.stop();
+
+        return result;
+    });
 }
 
 function collectDescendantIds(menus, parentId) {
@@ -82,7 +92,7 @@ export async function has(id) {
 }
 
 export function create(createProperties) {
-    return queueWrite(() => createNow(createProperties));
+    return writeQueue.run('create', () => createNow(createProperties));
 }
 
 async function createNow(createProperties) {
@@ -139,7 +149,7 @@ export async function createSeparator(parentId) {
 }
 
 export function update(id, updateProperties) {
-    return queueWrite(() => updateNow(id, updateProperties));
+    return writeQueue.run('update', () => updateNow(id, updateProperties));
 }
 
 async function updateNow(id, updateProperties) {
@@ -181,7 +191,7 @@ async function updateNow(id, updateProperties) {
 }
 
 export function remove(id) {
-    return queueWrite(() => removeNow(id));
+    return writeQueue.run('remove', () => removeNow(id));
 }
 
 async function removeNow(id) {
@@ -209,7 +219,7 @@ async function removeNow(id) {
 }
 
 export function removeChildren(parentId) {
-    return queueWrite(() => removeChildrenNow(parentId));
+    return writeQueue.run('remove-children', () => removeChildrenNow(parentId));
 }
 
 async function removeChildrenNow(parentId) {
@@ -234,7 +244,7 @@ async function removeChildrenNow(parentId) {
 }
 
 export function removeAll() {
-    return queueWrite(removeAllNow);
+    return writeQueue.run('remove-all', removeAllNow);
 }
 
 async function removeAllNow() {

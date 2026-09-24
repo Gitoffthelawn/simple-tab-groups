@@ -6,7 +6,7 @@ The `npm run build-zip` command will create 2 zip archives in the `dist-zip` fol
 The file `simple-tab-groups@drive4ik-v5.0-dev.zip` has the source code - I upload it with each release.
 The file `simple-tab-groups@drive4ik-v5.0-prod.zip` has compiled code from the command `npm run build`, which actually gets into the resulting XPI file.
 All these commands and their execution are described in the `package.json` file.
-How the build is going and with what settings you can also see in the file `webpack.config.mjs`
+How the build is going and with what settings you can also see in the file `webpack.config.js`
 
 I use Windows 11 x64
 

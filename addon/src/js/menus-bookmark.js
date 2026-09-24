@@ -159,37 +159,41 @@ export function removeListeners() {
 
 async function onPermissionsChanged(permissions) {
     if (Permissions.hasAny(permissions, Permissions.BOOKMARKS)) {
-        const hasPermission = await Bookmarks.hasPermission();
-        const hasMenus = await Menus.has(PARENT_ID);
+        await Menus.transaction('bookmark-permission-changed', async () => {
+            const hasPermission = await Bookmarks.hasPermission();
+            const hasMenus = await Menus.has(PARENT_ID);
 
-        if (hasPermission && !hasMenus) {
-            await createMenus();
-        } else if (!hasPermission && hasMenus) {
-            await removeMenus();
-        }
+            if (hasPermission && !hasMenus) {
+                await createMenus();
+            } else if (!hasPermission && hasMenus) {
+                await removeMenus();
+            }
 
-        await Menus.update(EXPORT_ALL_GROUPS_ID, {
-            enabled: hasPermission,
+            await Menus.update(EXPORT_ALL_GROUPS_ID, {
+                enabled: hasPermission,
+            });
         });
     }
 }
 
 async function onStorageChanged(changes) {
     if (Storage.isChangedKey('showArchivedGroups', changes, Boolean)) {
-        const hasPermission = await Bookmarks.hasPermission();
+        await Menus.transaction('bookmark-settings-changed', async () => {
+            const hasPermission = await Bookmarks.hasPermission();
 
-        if (!hasPermission) {
-            return
-        }
+            if (!hasPermission) {
+                return
+            }
 
-        logger.log('onStorageChanged showArchivedGroups, updating groups menus...');
+            logger.log('onStorageChanged showArchivedGroups, updating groups menus...');
 
-        const settings = await loadSettings();
-        const {groups} = await Groups.load();
+            const settings = await loadSettings();
+            const {groups} = await Groups.load();
 
-        for (const group of groups) {
-            await updateGroup(group, settings, true);
-        }
+            for (const group of groups) {
+                await updateGroup(group, settings, true);
+            }
+        });
     }
 }
 

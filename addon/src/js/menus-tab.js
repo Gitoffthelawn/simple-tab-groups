@@ -89,14 +89,16 @@ async function createMenus(settings = null) {
         module: [MODULE_NAME, 'openInTemporaryContainer'],
     });
 
+    const currentWindow = await Windows.getLastFocusedNormalWindow(false);
+
     await Menus.create({
         id: SET_ICON_TO_GROUP_ID,
         parentId: PARENT_ID,
         title: Lang('setTabIconAsGroupIcon'),
         icon: 'icons/image.svg',
+        enabled: Boolean(currentWindow?.groupId),
         module: [MODULE_NAME, 'setIconAsGroupIcon'],
     });
-
 }
 
 async function removeMenus() {
@@ -174,32 +176,35 @@ export function removeListeners() {
 
 async function onStorageChanged(changes) {
     if (Storage.isChangedKey('showContextMenuOnTabs', changes, Boolean)) {
-        logger.log('onStorageChanged', {showContextMenuOnTabs: changes.showContextMenuOnTabs});
+        await Menus.transaction('tab-settings-changed-context-menu', async () => {
+            logger.log('onStorageChanged', {showContextMenuOnTabs: changes.showContextMenuOnTabs});
 
-        const exists = await Menus.has(PARENT_ID);
+            const exists = await Menus.has(PARENT_ID);
 
-        if (changes.showContextMenuOnTabs.newValue) {
-            exists || await createMenus();
-        } else {
-            exists && await removeMenus();
-            return;
-        }
+            if (changes.showContextMenuOnTabs.newValue) {
+                exists || await createMenus();
+            } else {
+                exists && await removeMenus();
+            }
+        });
     }
 
     if (Storage.isChangedKey('showArchivedGroups', changes, Boolean)) {
-        const settings = await loadSettings();
+        await Menus.transaction('tab-settings-changed-archived-groups', async () => {
+            const settings = await loadSettings();
 
-        if (!settings.showContextMenuOnTabs) {
-            return
-        }
+            if (!settings.showContextMenuOnTabs) {
+                return
+            }
 
-        logger.log('onStorageChanged', {showArchivedGroups: changes.showArchivedGroups});
+            logger.log('onStorageChanged', {showArchivedGroups: changes.showArchivedGroups});
 
-        const {groups} = await Groups.load();
+            const {groups} = await Groups.load();
 
-        for (const group of groups) {
-            await updateGroup(group, settings);
-        }
+            for (const group of groups) {
+                await updateGroup(group, settings);
+            }
+        });
     }
 }
 
@@ -224,7 +229,7 @@ async function onWindowFocusChanged(windowId) {
 
     await Menus.update(SET_ICON_TO_GROUP_ID, {
         enabled: Boolean(groupId),
-    });
+    }).catch(logger.onCatch(['cant update', SET_ICON_TO_GROUP_ID], false));
 }
 
 // actions
@@ -255,7 +260,8 @@ export async function setIconAsGroupIcon(info, tab) {
     const groupId = await browser.sessions.getWindowValue(tab.windowId, 'groupId');
 
     if (!groupId) {
-        await Menus.update(info.menuItemId, {enabled: false});
+        await Menus.update(info.menuItemId, {enabled: false})
+            .catch(log.onCatch(['cant update', info.menuItemId], false));
         log.stopWarn('no group found');
         return;
     }

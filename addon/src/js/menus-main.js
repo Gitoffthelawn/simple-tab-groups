@@ -18,42 +18,46 @@ const REOPEN_TEMP_TABS_ID = 'reopenTabsWithTemporaryContainers';
 
 const logger = new Logger(MODULE_NAME);
 
-export async function create(withExtra = true) {
-    const log = logger.start(create, {withExtra});
+export function create(withExtra = true) {
+    return Menus.transaction('create', async () => {
+        const log = logger.start(create, {withExtra});
 
-    await Menus.removeAll();
+        await Menus.removeAll();
 
-    await MenusBookmark.create(withExtra);
-    await MenusTab.create(withExtra);
-    await MenusLink.create(withExtra);
+        await MenusBookmark.create(withExtra);
+        await MenusTab.create(withExtra);
+        await MenusLink.create(withExtra);
 
-    if (withExtra) {
-        await Menus.create({
-            id: REOPEN_TEMP_TABS_ID,
-            title: Lang('reopenTabsWithTemporaryContainers'),
-            icon: Containers.TEMPORARY.iconUrl,
-            context: Menus.ContextType.BROWSER_ACTION,
-            module: [MODULE_NAME, 'reopenTabsWithTemporaryContainers'],
-        });
-    }
+        if (withExtra) {
+            await Menus.create({
+                id: REOPEN_TEMP_TABS_ID,
+                title: Lang('reopenTabsWithTemporaryContainers'),
+                icon: Containers.TEMPORARY.iconUrl,
+                context: Menus.ContextType.BROWSER_ACTION,
+                module: [MODULE_NAME, 'reopenTabsWithTemporaryContainers'],
+            });
+        }
 
-    log.stop();
+        log.stop();
+    });
 }
 
-export async function remove(withExtra = true) {
-    const log = logger.start(remove, {withExtra});
+export function remove(withExtra = true) {
+    return Menus.transaction('remove', async () => {
+        const log = logger.start(remove, {withExtra});
 
-    await MenusBookmark.remove(withExtra);
-    await MenusTab.remove(withExtra);
-    await MenusLink.remove(withExtra);
+        await MenusBookmark.remove(withExtra);
+        await MenusTab.remove(withExtra);
+        await MenusLink.remove(withExtra);
 
-    if (withExtra) {
-        if (await Menus.has(REOPEN_TEMP_TABS_ID)) {
-            await Menus.remove(REOPEN_TEMP_TABS_ID);
+        if (withExtra) {
+            if (await Menus.has(REOPEN_TEMP_TABS_ID)) {
+                await Menus.remove(REOPEN_TEMP_TABS_ID);
+            }
         }
-    }
 
-    log.stop();
+        log.stop();
+    });
 }
 
 export function addListeners() {
@@ -68,40 +72,52 @@ export function removeListeners() {
     MenusLink.removeListeners();
 }
 
-export async function updateGroup(group) {
-    await MenusBookmark.updateGroup(group);
-    await MenusTab.updateGroup(group);
-    await MenusLink.updateGroup(group);
+export function updateGroup(group) {
+    return Menus.transaction('update-group', async () => {
+        await MenusBookmark.updateGroup(group);
+        await MenusTab.updateGroup(group);
+        await MenusLink.updateGroup(group);
+    });
 }
 
-export async function groupLoaded(group, windowId) {
-    await MenusBookmark.groupLoaded(group, windowId);
-    await MenusTab.groupLoaded(group, windowId);
-    await MenusLink.groupLoaded(group, windowId);
+export function groupLoaded(group, windowId) {
+    return Menus.transaction('group-loaded', async () => {
+        await MenusBookmark.groupLoaded(group, windowId);
+        await MenusTab.groupLoaded(group, windowId);
+        await MenusLink.groupLoaded(group, windowId);
+    });
 }
 
-export async function groupUnloaded(group, windowId) {
-    await MenusBookmark.groupUnloaded(group, windowId);
-    await MenusTab.groupUnloaded(group, windowId);
-    await MenusLink.groupUnloaded(group, windowId);
+export function groupUnloaded(group, windowId) {
+    return Menus.transaction('group-unloaded', async () => {
+        await MenusBookmark.groupUnloaded(group, windowId);
+        await MenusTab.groupUnloaded(group, windowId);
+        await MenusLink.groupUnloaded(group, windowId);
+    });
 }
 
-export async function groupAdded(group, windowId = null) {
-    await MenusBookmark.groupAdded(group, windowId);
-    await MenusTab.groupAdded(group, windowId);
-    await MenusLink.groupAdded(group, windowId);
+export function groupAdded(group, windowId = null) {
+    return Menus.transaction('group-added', async () => {
+        await MenusBookmark.groupAdded(group, windowId);
+        await MenusTab.groupAdded(group, windowId);
+        await MenusLink.groupAdded(group, windowId);
+    });
 }
 
-export async function groupRemoved(group) {
-    await MenusBookmark.groupRemoved(group);
-    await MenusTab.groupRemoved(group);
-    await MenusLink.groupRemoved(group);
+export function groupRemoved(group) {
+    return Menus.transaction('group-removed', async () => {
+        await MenusBookmark.groupRemoved(group);
+        await MenusTab.groupRemoved(group);
+        await MenusLink.groupRemoved(group);
+    });
 }
 
-export async function groupsUpdated(groups) {
-    await MenusBookmark.groupsUpdated(groups);
-    await MenusTab.groupsUpdated(groups);
-    await MenusLink.groupsUpdated(groups);
+export function groupsUpdated(groups) {
+    return Menus.transaction('groups-updated', async () => {
+        await MenusBookmark.groupsUpdated(groups);
+        await MenusTab.groupsUpdated(groups);
+        await MenusLink.groupsUpdated(groups);
+    });
 }
 
 // actions

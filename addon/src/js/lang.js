@@ -193,7 +193,8 @@ function translateNodes(parentElement) {
         const translated = Lang(node.nodeValue.trim(), data, {html});
 
         if (html) {
-            node.replaceWith(document.createRange().createContextualFragment(translated));
+            const {body} = new DOMParser().parseFromString(translated, 'text/html');
+            node.replaceWith(...body.childNodes);
         } else {
             node.nodeValue = translated;
         }

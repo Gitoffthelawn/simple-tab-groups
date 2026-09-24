@@ -5,7 +5,7 @@ import path from 'path';
 import {zip, COMPRESSION_LEVEL} from 'zip-a-folder';
 import { fileURLToPath } from 'url';
 import webpack from 'webpack';
-import config from '../webpack.config.mjs';
+import config from '../webpack.config.js';
 import manifest from '../src/manifest.json' with { type: 'json' };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -86,7 +86,7 @@ async function init() {
     await fse.copy(setPath('README.md'), setDevPath('README.md'));
     await fse.copy(setPath('package.json'), setDevPath('package.json'));
     await fse.copy(setPath('package-lock.json'), setDevPath('package-lock.json'));
-    await fse.copy(setPath('webpack.config.mjs'), setDevPath('webpack.config.mjs'));
+    await fse.copy(setPath('webpack.config.js'), setDevPath('webpack.config.js'));
 
     await compressToZip(devPath, distZipPath, devFileName);
 

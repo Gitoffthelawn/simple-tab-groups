@@ -1,6 +1,7 @@
 import './prefixed-storage.js';
 
 import Logger, {errorEventHandler} from './logger.js';
+import Queue from './queue.js';
 import backgroundSelf from './background.js'; // TODO refactor to use Broadcast
 import * as GroupsBroadcast from './broadcast.js?channel=groups';
 import * as Constants from './constants.js';
@@ -313,7 +314,7 @@ if (Constants.IS_BACKGROUND_PAGE) {
 
         const log = logger.start('Containers.onChanged listener');
 
-        await enqueue(async () => {
+        await writeQueue.run('containers-changed', async () => {
             const {groups} = await load();
 
             if (normalizeContainersInGroups(groups)) {
@@ -373,16 +374,10 @@ export async function load(groupId = null, withTabs = false, params) {
 
 // every load-modify-save of the groups array funnels here - the mirrors of different windows,
 // composite operations, sync and UI edits must not interleave (lost update)
-let writeQueue = Promise.resolve();
-
-function enqueue(fn) {
-    const turn = writeQueue.then(fn);
-    writeQueue = turn.catch(() => {});
-    return turn;
-}
+const writeQueue = new Queue('Groups');
 
 export function save(groups, withMessage = false) {
-    return enqueue(async () => {
+    return writeQueue.run('save', async () => {
         if (typeof groups === 'function') {
             groups = await groups();
 
@@ -520,7 +515,7 @@ async function addNow(windowId, tabIds = [], title = null) {
         }
     }
 
-    const newGroup = await enqueue(async () => {
+    const newGroup = await writeQueue.run('add', async () => {
         const {groups} = await load();
         const {defaultGroupProps} = await getDefaults();
 
@@ -583,7 +578,7 @@ async function removeNow(groupIds) {
         }
     }
 
-    const removedGroups = await enqueue(async () => {
+    const removedGroups = await writeQueue.run('remove', async () => {
         const {groups} = await load(null, true);
         const {defaultGroupProps} = await getDefaults();
 
@@ -724,7 +719,7 @@ async function restoreNow(groupId) {
 
     await browser.storage.session.remove(restoreId);
 
-    await enqueue(async () => {
+    await writeQueue.run('restore', async () => {
         const {groups} = await load();
 
         groups.push(group);
@@ -754,7 +749,7 @@ async function restoreNow(groupId) {
 }
 
 export function update(groupId, updateData) {
-    return enqueue(() => updateNow(groupId, updateData));
+    return writeQueue.run('update', () => updateNow(groupId, updateData));
 }
 
 async function updateNow(groupId, updateData) {
@@ -829,7 +824,7 @@ async function updateNow(groupId, updateData) {
 export async function move(groupId, newGroupIndex) {
     const log = logger.start('move', {groupId, newGroupIndex});
 
-    const groups = await enqueue(async () => {
+    const groups = await writeQueue.run('move', async () => {
         const {groups, groupIndex} = await load(groupId);
 
         groups.splice(newGroupIndex, 0, groups.splice(groupIndex, 1)[0]);
@@ -851,7 +846,7 @@ export async function sort(vector = 'asc') {
         log.throwError(`invalid sort vector: ${vector}`);
     }
 
-    const groups = await enqueue(async () => {
+    const groups = await writeQueue.run('sort', async () => {
         const {groups} = await load();
 
         if ('asc' === vector) {
@@ -1028,7 +1023,7 @@ async function archiveToggleNow(groupId) {
         }
     }
 
-    const {group, tabsToRemove, savedTabs, creation} = await enqueue(async () => {
+    const {group, tabsToRemove, savedTabs, creation} = await writeQueue.run('archive-toggle', async () => {
         const {group, groups} = await load(groupId, true);
 
         let tabsToRemove = [],
@@ -1065,8 +1060,8 @@ async function archiveToggleNow(groupId) {
     });
 
     if (creation) {
-        // outside the queue turn: the settle takes the window gate, and a native-group apply
-        // holding that gate ends with Groups.update - a turn of this very queue
+        // outside the queue turn: the settle ends with a native-group apply, and its Groups.update
+        // is a turn of this very queue
         await settleTabs(group, savedTabs, creation);
     }
 
